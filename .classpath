@@ -32,6 +32,7 @@
 		</attributes>
 	</classpathentry>
 	<classpathentry kind="con" path="org.eclipse.buildship.core.gradleclasspathcontainer"/>
-	<classpathentry combineaccessrules="false" kind="src" path="/CreateOsmDatabases"/>
+	<classpathentry kind="lib" path="C:/Devel/EclipseWorkspace/jars/UtilsLibrary.jar"/>
+	<classpathentry kind="lib" path="C:/Devel/EclipseWorkspace/jars/sqlite-jdbc-3.23.1.jar"/>
 	<classpathentry kind="output" path="bin/default"/>
 </classpath>

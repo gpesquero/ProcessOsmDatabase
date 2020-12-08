@@ -25,24 +25,27 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
-import CreateOsmDatabases.Log;
-import CreateOsmDatabases.OsmDatabase;
-
 import org.openstreetmap.osmosis.core.domain.v0_6.Relation;
 import org.openstreetmap.osmosis.core.domain.v0_6.Tag;
+import org.utilslibrary.Log;
+import org.utilslibrary.OsmDatabase;
 
 public class ProcessOsmDatabase {
 	
-	private final static String XML_MAIN_NODE_NAME="ProcessOsmDatabase";
+	private final static String APP_NAME = "ProcessOsmDatabase";
+	
+	private final static String XML_MAIN_NODE_NAME = APP_NAME;
 	
 	private final static String XML_ATTRIB_FILE_NAME="filename";
 	
-	//private final static int MAX_ADMIN_LEVEL=11;
+	private static String mPath = null;
 	
-	private static String mPath=null;
+	private static OsmDatabase mDatabase = null;
 	
-	private static OsmDatabase mDatabase=null;
-
+	private static PTv2Checker mPTv2Checker = null;
+	
+	private static GeoJSONFile mOutputGeoJsonFile = null;
+	
 	public static void main(String[] args) {
 		
 		Log.info("Starting ProcessOsmDatabase...");
@@ -54,9 +57,36 @@ public class ProcessOsmDatabase {
 			return;
 		}
 		
-		Log.info("Processing XML file <"+args[0]+">...");
+		mPTv2Checker = new PTv2Checker();
 		
-		File file = new File(args[0]);
+		// Set input XML file name
+		
+		String inputXmlFileName = args[0];
+		
+		Log.info("Input XML file <"+inputXmlFileName+">...");
+		
+		// Set output GeoJSON file name
+		
+		int index = inputXmlFileName.indexOf(".xml");
+		
+		String outputGeoJsonFileName;
+		
+		if (index < 0) {
+			
+			outputGeoJsonFileName = inputXmlFileName + ".geojson";
+		}
+		else {
+			
+			outputGeoJsonFileName = inputXmlFileName.substring(0, index) + ".geojson";
+		}
+		
+		Log.info("Output GeoJSON file <" + outputGeoJsonFileName + ">");
+		
+		mOutputGeoJsonFile = new GeoJSONFile(outputGeoJsonFileName, APP_NAME);
+		
+		Log.info("Processing input XML file <" + inputXmlFileName + ">...");
+		
+		File file = new File(inputXmlFileName);
 		
 		DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory
 		        .newInstance();
@@ -100,7 +130,10 @@ public class ProcessOsmDatabase {
 		
 		Log.info("Processing nodes...");
 		
-		processElement(mainElement);	
+		processElement(mainElement);
+		
+		// Close output GeoJSON file...
+		mOutputGeoJsonFile.close();
 		
 		Log.info("ProcessOsmDatabase finished...");
 	}
@@ -117,7 +150,13 @@ public class ProcessOsmDatabase {
 			if (!openDataBase(element)) {
 				
 				return false;
-			}		
+			}
+			else {
+				
+				mPTv2Checker.setOsmDatabase(mDatabase);
+				
+				mPTv2Checker.setGeoJSONFile(mOutputGeoJsonFile);
+			}
 		}
 		else if (element.getNodeName().compareTo("relation")==0) {
 			
@@ -143,9 +182,6 @@ public class ProcessOsmDatabase {
 			
 			tags.add(new Tag("type", relType));
 			
-			//relations=mDataBase.getRelationsIdsByType(relType);
-			
-			//Log.info("Detected "+relations.size()+" relations of type <"+relType+">");
 		}
 		else if (element.getNodeName().compareTo("filter")==0) {
 			
@@ -172,16 +208,8 @@ public class ProcessOsmDatabase {
 				String key=n.getNodeName();
 				String value=n.getNodeValue();
 				
-				//Log.debug("Filter: <"+key+">, value: <"+value+">");
-				
 				tags.add(new Tag(key, value));
 				
-				//relations=mDataBase.filterRelations(relations, n.getNodeName(), n.getNodeValue());
-
-				/*
-				Log.info("Filtered "+relations.size()+" relations with key <"+n.getNodeName()+
-						"> and value <"+n.getNodeValue()+">");
-						*/
 			}
 		}
 		else if (element.getNodeName().compareTo("check")==0) {
@@ -244,11 +272,7 @@ public class ProcessOsmDatabase {
 						
 						Iterator<Long> iterRelIds=relIds.iterator();
 						
-						//Pair<Long, String> pairs=new Pair<Long, String>(Long.valueOf(1), "");
-						
 						ArrayList<Pair<Long, String>> pairs=new ArrayList<Pair<Long, String>>();
-						
-						//HashMap<Long, String> map=new HashMap<Long, String>();						
 						
 						while (iterRelIds.hasNext()) {
 							
@@ -272,19 +296,13 @@ public class ProcessOsmDatabase {
 									
 									pairs.add(new Pair<Long, String>(relId, ref));
 									
-									//map.put(relId, ref);
-									
 									break;
 								}
 							}
 						}
 						
-						//ArrayList<String> mapValues=new ArrayList<>(map.values());
-						
-						//Collections.sort(mapValues);
-						
-						Collections.sort(pairs, new Comparator<Pair<Long, String>>()
-						{
+						Collections.sort(pairs, new Comparator<Pair<Long, String>>() {
+							
 							@Override
 							public int compare(Pair<Long, String> o1, Pair<Long, String> o2) {
 								
@@ -307,31 +325,13 @@ public class ProcessOsmDatabase {
 					}					
 					
 				}
-				/*
-				else if (key.compareTo("PT")==0) {
-					
-					if (value.compareTo("v2")==0) {
-						
-						Log.info("Checking PTv2");
-						
-						mDatabase.checkPTv2(relIds);				
-						
-					}
-					else {
-						
-						Log.error("Unknown value <"+value+"> for check <PT>");
-						
-					}
-						
-				}
-				*/
 				else if (key.compareTo("route")==0) {
 					
 					if (value.compareTo("PTv2")==0) {
 						
 						Log.info("Checking route <PTv2>");
 						
-						mDatabase.checkPTv2(relIds);						
+						mPTv2Checker.checkRelations(relIds);					
 					}
 					else if (value.compareTo("hiking")==0) {
 						
@@ -350,10 +350,6 @@ public class ProcessOsmDatabase {
 					Log.error("Unknown check key <"+key+"> and value <"+value+">");
 				}
 				
-				/*
-				Log.info("Filtered "+relations.size()+" relations with key <"+n.getNodeName()+
-						"> and value <"+n.getNodeValue()+">");
-						*/
 			}
 			
 		}
@@ -364,34 +360,7 @@ public class ProcessOsmDatabase {
 			return true;
 		}
 		
-		//System.out.println("<"+node.getNodeName()+">");
-		
-		/*
-		if (element.hasChildNodes()==false) {
-			
-			System.out.println("Node <"+node.getNodeName()+"> has no child nodes");
-			
-			return;
-		}
-		*/
-		
 		NodeList childNodes=element.getChildNodes();
-		
-		/*
-		ArrayList<Tag> childTags=null;
-		
-		if (tags!=null) {
-			
-			childTags=new ArrayList<Tag>();
-			
-			Iterator<Tag> iter=tags.iterator();
-			
-			while(iter.hasNext()) {
-				
-				childTags.add(iter.next());
-			}			
-		}
-		*/
 		
 		for(int i=0; i<childNodes.getLength(); i++) {
 			
@@ -446,15 +415,13 @@ public class ProcessOsmDatabase {
 	        	return true;
 		        
 	        }
-	        };
+	    };
 		
 		File[] mapDatabaseFiles=folder.listFiles(filter);
 		
 		if (mapDatabaseFiles.length<1) {
 		
 			Log.error("No <"+mapFileName+"*.db> map files were found!");
-			
-			//System.out.println("Quitting...");
 			
 			return false;	
 		}
@@ -463,7 +430,7 @@ public class ProcessOsmDatabase {
 		
 		Log.info("Opening map database <"+mapDatabaseFile.getAbsolutePath()+">");
 		
-		mDatabase=new OsmDatabase();
+		mDatabase = new OsmDatabase();
 		
 		if (!mDatabase.openDatabase(mapDatabaseFile.getAbsolutePath())) {
 			
@@ -591,7 +558,4 @@ public class ProcessOsmDatabase {
 		}
 	}
 	*/
-	
-	
-	
 }
