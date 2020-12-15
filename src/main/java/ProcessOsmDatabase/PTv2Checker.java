@@ -25,12 +25,24 @@ public class PTv2Checker {
 	
 	private GeoJSONFile mOutFile = null;
 	
-	private static final int UNKNOWN=-1;
-	private static final int ASCENDING=0;
-	private static final int DESCENDING=1;
+	private static final int UNKNOWN = -1;
+	private static final int ASCENDING = 0;
+	private static final int DESCENDING = 1;
 	
-	public PTv2Checker() {
+	private static final double MAX_STOP_PLATFORM_DISTANCE = 20.0;
+	
+	List<Long> mRelsToProcess = null;
+	
+	private enum ErrorLevel {
 		
+		HIGH,
+		MEDIUM,
+		LOW
+	}
+	
+	public PTv2Checker(List<Long> relsToProcess) {
+		
+		mRelsToProcess = relsToProcess;
 	}
 	
 	public void setOsmDatabase(OsmDatabase database) {
@@ -53,7 +65,7 @@ public class PTv2Checker {
 			
 			Log.debug("Checking PTv2 of relation with id="+relId);
 			
-			Relation rel=mDatabase.getRelationById(relId);
+			Relation rel = mDatabase.getRelationById(relId);
 			
 			if (rel != null) {
 				
@@ -94,7 +106,11 @@ public class PTv2Checker {
 				}
 				else {
 					
-					Log.warning("PTv2: Relation #"+relation.getId()+" has an incorrect type <"+tag.getValue()+">");
+					Coord coord = mDatabase.getRelationCoord(relation);
+					
+					String description = "Relation has an incorrect type '"+tag.getValue()+"'";
+					
+					addNodeToGeoJson(ErrorLevel.HIGH, coord, relation.getId(), description);
 					
 					break;
 				}
@@ -103,13 +119,16 @@ public class PTv2Checker {
 		
 		if (!processed) {
 			
-			Log.warning("PTv2: Relation #"+relation.getId()+" is not a route or route_master");
+			Coord coord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Relation is not a 'route' or 'route_master'";
+			
+			addNodeToGeoJson(ErrorLevel.HIGH, coord, relation.getId(), description);
 		}
 	}
 	
 	public void checkRouteMaster(Relation relation) {
 		
-		//boolean hasPTv2Tag=false;
 		boolean isBusRoute=false;
 		
 		Collection<Tag> relTags=relation.getTags();
@@ -127,27 +146,15 @@ public class PTv2Checker {
 					isBusRoute=true;
 				}
 			}
-			/*
-			else if (tag.getKey().compareTo("public_transport:version")==0) {
-				
-				if (tag.getValue().compareTo("2")==0) {
-					
-					hasPTv2Tag=true;						
-				}
-			}
-			*/
 		}
-		
-		/*
-		if (!hasPTv2Tag) {
-			
-			Log.warning("PTv2: Master Route Relation #"+relation.getId()+" has no <public_transport:version=2> tag");
-		}
-		*/
 		
 		if (!isBusRoute) {
 			
-			Log.warning("PTv2: Master Route Relation #"+relation.getId()+" is not a bus route");
+			Coord coord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Master Route Relation is not a bus route";
+			
+			addNodeToGeoJson(ErrorLevel.HIGH, coord, relation.getId(), description);
 		}
 		
 		int numberOfRoutes=0;
@@ -160,8 +167,12 @@ public class PTv2Checker {
 			
 			if (!member.getMemberRole().isEmpty()) {
 				
-				Log.warning("PTv2: Master Route Relation #"+relation.getId()+": Member in pos <"+pos+
-						"> does not have an empty role <"+member.getMemberRole()+">");
+				Coord coord = mDatabase.getRelationCoord(relation);
+				
+				String description = "Member of Master Route Relation in pos '"+pos+
+						"' does not have an empty role '"+member.getMemberRole()+"'";
+				
+				addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);
 			}
 			
 			if (member.getMemberType()==EntityType.Relation) {
@@ -174,24 +185,48 @@ public class PTv2Checker {
 			}
 			else {
 				
-				Log.warning("PTv2: Master Route Relation #"+relation.getId()+": Member in pos <"+pos+
-						"> is not a relation");
+				Coord coord = mDatabase.getRelationCoord(relation);
+				
+				String description = "Member of Master Route Relation in pos '"+pos+"' is not a relation";
+				
+				addNodeToGeoJson(ErrorLevel.HIGH, coord, relation.getId(), description);
 			}				
 		}
 		
 		if (numberOfRoutes<1) {
 			
-			Log.warning("PTv2: Master Route Relation #"+relation.getId()+": Master Route does not have any relation");			
+			Coord coord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Master Route does not have any relation";
+			
+			addNodeToGeoJson(ErrorLevel.HIGH, coord, relation.getId(), description);
 		}
 		else if (numberOfRoutes<2) {
 			
-			Log.warning("PTv2: Master Route Relation #"+relation.getId()+": Master Route only has 1 relation");			
+			Coord coord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Master Route only has 1 relation";
+			
+			addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 		}
 	}
 	
 	public void checkRoute(Relation relation) {
 		
 		Log.debug("PTv2: Checking relation <"+relation.getId()+">");
+		
+		if (mRelsToProcess != null) {
+			
+			if (!mRelsToProcess.contains(relation.getId())) {
+				
+				// Relation not included in rels to process...
+				return;
+			}
+			else {
+				
+				Log.info("Processing filtered relation with id #" + relation.getId());
+			}
+		}
 		
 		// Step #1: Check for tag 'public_transport:version=2'
 		
@@ -216,66 +251,81 @@ public class PTv2Checker {
 		
 		if (!hasPTv2Tag) {
 			
-			Log.warning("PTv2: Relation #"+relation.getId()+" has no <public_transport:version=2> tag");
+			Coord coord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Relation has no 'public_transport:version=2' tag";
+			
+			addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 		}
 		
 		// Step #2: Check list of stops and platforms
 		
-		List<Long> stopNodesIds=new ArrayList<Long>();
-		List<Long> waysIds=new ArrayList<Long>();
-		List<Long> linkNodesIds=new ArrayList<Long>();
+		List<Long> stopNodesIds = new ArrayList<Long>();
+		List<Long> waysIds = new ArrayList<Long>();
+		List<Long> linkNodesIds = new ArrayList<Long>();
 				
-		List<RelationMember> members=relation.getMembers();
+		List<RelationMember> members = relation.getMembers();
 		
-		boolean foundEmptyRole=false;
-		boolean detectedIncorrectStopPos=false;
-		boolean detectedIncorrectPlatformPos=false;
+		boolean foundEmptyRole = false;
+		boolean detectedIncorrectStopPos = false;
+		boolean detectedIncorrectPlatformPos = false;
 		
-		Coord stopNodeCoord=null;
+		Coord stopNodeCoord = null;
 		
 		for(int pos=0; pos<members.size(); pos++) {
 		
-			RelationMember member=members.get(pos);
+			RelationMember member = members.get(pos);
 			
-			if (member.getMemberRole().compareTo("stop")==0) {
+			if (member.getMemberRole().compareTo("stop") == 0) {
 				
 				if (foundEmptyRole) {
 					
 					// Detected a stop member in an incorrect position (shall be located
 					// at the beginning of the relation)
 					
-					detectedIncorrectStopPos=true;
+					detectedIncorrectStopPos = true;
 				}
 				
-				if (member.getMemberType()==EntityType.Node) {
+				if (member.getMemberType() == EntityType.Node) {
 					
-					if (pos==(members.size()-1)) {
+					if (pos == (members.size()-1)) {
 						
-						Log.data("PTv2: Relation #"+relation.getId()+": Stop member node <"+member.getMemberId()+
-								"> in pos <"+pos+"> is not followed by a <platform> member");
+						Coord coord = mDatabase.getNodeCoord(member.getMemberId());
+						
+						String description = "Stop member <Node #"+member.getMemberId()+"> in pos '"+pos+
+								"' is not followed by a 'platform' member";
+						
+						addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 						
 						stopNodeCoord=null;
 					}
 					else {
 						
-						String nextMemberRole=members.get(pos+1).getMemberRole();
+						String nextMemberRole = members.get(pos+1).getMemberRole();
 						
-						if (nextMemberRole.compareTo("platform")!=0) {
+						if (nextMemberRole.compareTo("platform") != 0) {
 							
-							Log.warning("PTv2: Relation #"+relation.getId()+": Stop member node <"+member.getMemberId()+
-									"> in pos <"+pos+"> is not followed by a <platform> member");
-						}
-						
+							Coord coord = mDatabase.getNodeCoord(member.getMemberId());
+							
+							String description = "Stop member <Node #" + member.getMemberId() + "> in pos '" +
+									pos + "' is not followed by a 'platform' member";
+							
+							addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
+						}					
 					}
 					
 					// Check that stop node has correct attributes
 					
-					boolean foundPublicTransportTag=false;
+					boolean foundPublicTransportTag = false;
 					
-					Node stopNode=mDatabase.getNodeById(member.getMemberId());
+					Node stopNode = mDatabase.getNodeById(member.getMemberId());
 					
-					if (stopNode==null)
+					if (stopNode == null) {
+						
+						Log.warning("stopNode with id #" + member.getMemberId() + "not found!!");
+						
 						continue;
+					}
 					
 					Collection<Tag> tags=stopNode.getTags();
 					
@@ -285,135 +335,177 @@ public class PTv2Checker {
 						
 						Tag tag=nodeTagIter.next();
 						
-						if (tag.getKey().compareTo("public_transport")==0) {
+						if (tag.getKey().compareTo("public_transport") == 0) {
 							
-							foundPublicTransportTag=true;
+							foundPublicTransportTag = true;
 							
-							if (tag.getValue().compareTo("stop_position")!=0) {
+							if (tag.getValue().compareTo("stop_position") != 0) {
 								
-								Log.warning("PTv2: Relation #"+relation.getId()+": Stop node <"+member.getMemberId()+
-										"> in pos <"+pos+"> has incorrect <public_transport> tag="+tag.getValue());								
+								Coord coord = mDatabase.getNodeCoord(member.getMemberId());
+								
+								String description = "Stop <Node #"+member.getMemberId()+"> in pos '"+pos+
+										"' has incorrect 'public_transport' tag='"+tag.getValue()+"'";
+								
+								addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);
 							}
 						}
 					}
 					
 					if (!foundPublicTransportTag) {
 						
-						Log.warning("PTv2: Relation #"+relation.getId()+": Stop node <"+member.getMemberId()+
-								"> in pos <"+pos+"> does not have the <public_transport> tag");
+						Coord coord = mDatabase.getNodeCoord(member.getMemberId());
+						
+						String description = "Stop <Node #"+member.getMemberId()+"> in pos '"+pos+
+								"' does not have the 'public_transport' tag";
+						
+						addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);
 					}
 					
-					Long nodeId=member.getMemberId();
+					Long nodeId = member.getMemberId();
 					
 					stopNodesIds.add(nodeId);
 					
-					stopNodeCoord=new Coord(stopNode.getLatitude(), stopNode.getLongitude());
+					stopNodeCoord = new Coord(stopNode.getLatitude(), stopNode.getLongitude());
 				}
 				else {
 					
 					// Stop is not a node. Weird....
 					
-					Log.warning("PTv2: Relation #"+relation.getId()+": Stop member in pos <"+pos+"> is not a node...");
+					Coord coord = mDatabase.getRelationCoord(relation);
+					
+					String description = "Stop member in pos '"+pos+"' is not a node...";
+					
+					addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);
 				}				
 			}
-			else if (member.getMemberRole().compareTo("platform")==0) {
+			else if (member.getMemberRole().compareTo("platform") == 0) {
 				
 				if (foundEmptyRole) {
 					
 					// Detected a platform member in an incorrect position (shall be located
 					// at the beginning of the relation)
 					
-					detectedIncorrectPlatformPos=true;
+					detectedIncorrectPlatformPos = true;
 				}
 				
-				if (member.getMemberType()==EntityType.Node) {
+				if (member.getMemberType() == EntityType.Node) {
 					
 					Node platformNode = mDatabase.getNodeById(member.getMemberId());
 					
-					if (platformNode==null)
-						continue;
-					
-					if (pos==0) {
+					if (platformNode == null) {
 						
-						Log.warning("PTv2: Relation #"+relation.getId()+": Platform member node <"+
-								member.getMemberId()+"> in pos <"+pos+"> does not follow a <stop> member");
+						Log.warning("platformNode with id #" + member.getMemberId() + "not found!!");
+					
+						continue;
+					}
+					
+					if (pos == 0) {
+						
+						Coord coord = mDatabase.getNodeCoord(member.getMemberId());
+						
+						String description = "Platform member <Node #" + member.getMemberId() + "> in pos '" +
+								pos + "' does not follow a 'stop' member";
+						
+						addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 						
 						stopNodeCoord=null;
 					}
 					else {
 						
-						String previousMemberRole=members.get(pos-1).getMemberRole();
+						String previousMemberRole = members.get(pos-1).getMemberRole();
 						
-						if (previousMemberRole.compareTo("stop")!=0) {
+						if (previousMemberRole.compareTo("stop") != 0) {
 							
-							Log.warning("PTv2: Relation #"+relation.getId()+": Platform member node <"+
-									member.getMemberId()+"> in pos <"+pos+"> does not follow a <stop> member");
+							Coord coord = mDatabase.getNodeCoord(member.getMemberId());
+							
+							String description = "Platform member <Node #"+member.getMemberId() + "> in pos '" +
+									pos + "' does not follow a 'stop' member";
+							
+							addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 						}
 						else {
 							
 							// Check that distance between stop and platform nodes is less than 20 meters
 							
-							Coord platCoord=new Coord(platformNode.getLatitude(), platformNode.getLongitude());
+							Coord platCoord = new Coord(platformNode.getLatitude(), platformNode.getLongitude());
 							
-							double distance=stopNodeCoord.distanceTo(platCoord);
+							double distance = stopNodeCoord.distanceTo(platCoord);
 							
-							if (distance>20.0) {
+							if (distance > MAX_STOP_PLATFORM_DISTANCE) {
 								
-								Log.warning("PTv2: Relation #"+relation.getId()+": Distance between platform member node <"+
-										member.getMemberId()+"> and stop position is too big <"+
-										String.format("%.1f", distance)+" meters>");
+								Coord coord = mDatabase.getNodeCoord(member.getMemberId());
 								
-							}
-							
+								String description = "Distance between platform member <Node #"+member.getMemberId()+
+										"> and stop position is too big ("+
+										String.format(Locale.US, "%.1f", distance)+" meters)";
+								
+								addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);							
+							}					
 						}
 					}
 					
 					// Check that platform node has correct attributes
 					
-					boolean foundPublicTransportTag=false;
+					boolean foundPublicTransportTag = false;
 					
-					Collection<Tag> tags=platformNode.getTags();
+					Collection<Tag> tags = platformNode.getTags();
 					
-					Iterator<Tag> nodeTagIter=tags.iterator();
+					Iterator<Tag> nodeTagIter = tags.iterator();
 					
 					while(nodeTagIter.hasNext()) {
 						
-						Tag tag=nodeTagIter.next();
+						Tag tag = nodeTagIter.next();
 						
-						if (tag.getKey().compareTo("public_transport")==0) {
+						if (tag.getKey().compareTo("public_transport") == 0) {
 							
-							foundPublicTransportTag=true;
+							foundPublicTransportTag = true;
 							
-							if (tag.getValue().compareTo("platform")!=0) {
+							if (tag.getValue().compareTo("platform") != 0) {
 								
-								Log.warning("PTv2: Relation #"+relation.getId()+": Platform node <"+member.getMemberId()+
-										"> in pos <"+pos+"> has incorrect <public_transport> tag="+tag.getValue());								
+								Coord coord = mDatabase.getNodeCoord(member.getMemberId());
+								
+								String description = "Platform <Node #" + member.getMemberId() + "> in pos '" +
+										pos + "' has incorrect 'public_transport' tag='" + tag.getValue() + "'";
+								
+								addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);	
 							}
 						}
 					}
 					
 					if (!foundPublicTransportTag) {
 						
-						Log.warning("PTv2: Relation #"+relation.getId()+": Platform node <"+member.getMemberId()+
-								"> in pos <"+pos+"> does not have the <public_transport> tag");
+						Coord coord = mDatabase.getNodeCoord(member.getMemberId());
+						
+						String description = "Platform <Node #" + member.getMemberId() + "> in pos <" + pos +
+								"> does not have the <public_transport> tag";
+						
+						addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);
 					}
 				}
 				else {
 					
 					// Platform is not a node. Weird....
 					
-					Log.warning("PTv2: Relation #"+relation.getId()+": Platform member in pos <"+pos+
-							"> is not a node");
+					Coord coord = mDatabase.getRelationCoord(relation.getId());
+					
+					String description = "Platform <Node #" + member.getMemberId() + "> in pos '" + pos +
+							"' does not have the 'public_transport' tag";
+					
+					addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);
 				}				
 			}
 			else if (member.getMemberRole().isEmpty()) {
 				
 				// Found an empty role member. It shall be a way
 				
-				if (member.getMemberType()!=EntityType.Way) {
+				if (member.getMemberType() != EntityType.Way) {
 					
-					Log.warning("PTv2: Empty role relation member in pos <"+pos+"> of relation <"+relation.getId()+"> is not a way");
-						
+					Coord coord = mDatabase.getRelationCoord(relation.getId());
+					
+					String description = "Empty role relation member in pos '" + pos + "' is not a way";
+					
+					addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
+					
 					continue;
 				}
 				else {
@@ -425,28 +517,40 @@ public class PTv2Checker {
 			}
 			else {
 				
-				Log.warning("PTv2: Relation #"+relation.getId()+": Relation member in pos <"+pos+"> has incorrect role <"+
-						member.getMemberRole()+">");
+				Coord coord = mDatabase.getRelationCoord(relation.getId());
+				
+				String description = "Relation member in pos '" + pos + "' has incorrect role '" +
+						member.getMemberRole() + "'";
+				
+				addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 			}
 		}
 		
 		if (detectedIncorrectStopPos || detectedIncorrectPlatformPos) {
 			
-			Log.warning("PTv2: Relation #"+relation.getId()+": Detected incorrect stop or platform position"+
-					" (Shall be located at the beginning)");
+			Coord nodeCoord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Detected incorrect stop or platform position(s)" +
+									" (They shall be located at the beginning of the relation)";
+			
+			addNodeToGeoJson(ErrorLevel.MEDIUM, nodeCoord, relation.getId(), description);
 		}
 		
 		// Step #3: Check continuity between route ways
 		
-		boolean orderedRoute=true;
+		boolean orderedRoute = true;
 		
-		if (waysIds.size()==0) {
+		if (waysIds.size() == 0) {
 			
 			// No ways detected. Nothing else to check..
 			
-			Log.warning("PTv2: Relation <"+relation.getId()+"> has no ways");
+			Coord nodeCoord = mDatabase.getRelationCoord(relation);
 			
-			orderedRoute=false;
+			String description = "Relation has no ways";
+			
+			addNodeToGeoJson(ErrorLevel.MEDIUM, nodeCoord, relation.getId(), description);
+			
+			orderedRoute = false;
 		}
 		else if (waysIds.size()==1) {
 			
@@ -470,24 +574,25 @@ public class PTv2Checker {
 				
 				if (wayNodes.size()<2) {
 					
-					Log.warning("PTv2: Way <"+way.getId()+"> has less than 2 nodes");
+					Coord nodeCoord = mDatabase.getWayCoord(way);
+					
+					String description = "<Way #"+way.getId()+"> has less than 2 nodes";
+					
+					addNodeToGeoJson(ErrorLevel.HIGH, nodeCoord, relation.getId(), description);
 					
 					orderedRoute=false;
 					
 					continue;
 				}
 			
-				//long nodeId1=wayNodes.get(0).getNodeId();
-				//long nodeId2=wayNodes.get(wayNodes.size()-1).getNodeId();
+				long nodeId1 = myWay.getFirstNodeId();
+				long nodeId2 = myWay.getLastNodeId();
 				
-				long nodeId1=myWay.getFirstNodeId();
-				long nodeId2=myWay.getLastNodeId();
+				long nextLinkNode = -1;
 				
-				long nextLinkNode=-1;
-				
-				//Log.debug("PTv2: Way #"+pos+", Node1="+nodeId1+", Node2="+nodeId2);
+				Log.debug("PTv2: Way #" + pos + ", Node1=" + nodeId1 + ", Node2=" + nodeId2);
 					
-				if (pos==0) {
+				if (pos == 0) {
 					
 					// This is the first way
 					
@@ -515,17 +620,11 @@ public class PTv2Checker {
 						}
 						else {
 							
-							long firstNodeId = myWay.getFirstNodeId();
+							Coord coord = mDatabase.getWayCoord(way);
 							
-							Coord nodeCoord = mDatabase.getNodeCoord(firstNodeId);
+							String description = "Detected non continuity in <Way #" + way.getId() + ">";
 							
-							String description = "Detected non continuity in ";
-							
-							description += String.format(Locale.US,
-								"<a href='https://www.openstreetmap.org/way/%d' target='_blank'>Way #%d</a>",
-								way.getId(), way.getId());
-							
-							addNodeToGeoJson(nodeCoord, relation.getId(), description);
+							addNodeToGeoJson(ErrorLevel.HIGH, coord, relation.getId(), description);
 							
 							orderedRoute=false;
 							
@@ -555,16 +654,12 @@ public class PTv2Checker {
 							
 							Coord nodeCoord = mDatabase.getNodeCoord(prevLinkNode);
 							
-							String description = "Detected non continuity in ";
+							String description = "Detected non continuity in <Node #"+prevLinkNode+">";
 							
-							description += String.format(Locale.US,
-									"<a href='https://www.openstreetmap.org/node/%d' target='_blank'>Node #%d</a>",
-									prevLinkNode, prevLinkNode); 
+							addNodeToGeoJson(ErrorLevel.HIGH, nodeCoord, relation.getId(), description);
 							
-							addNodeToGeoJson(nodeCoord, relation.getId(), description);
-							
-							//Log.debug("PTv2: Pos="+pos+", wayId="+way.getId());							
-							//Log.debug("PTv2: PrevLinkNode="+prevLinkNode+", nodeId1="+nodeId1+", nodeId2="+nodeId2);							
+							Log.debug("PTv2: Pos="+pos+", wayId="+way.getId());							
+							Log.debug("PTv2: PrevLinkNode="+prevLinkNode+", nodeId1="+nodeId1+", nodeId2="+nodeId2);							
 							
 							orderedRoute=false;
 							
@@ -582,40 +677,56 @@ public class PTv2Checker {
 			}
 		}
 		
-		// Step #4: Check stop nodes
+		// Step #4: Check number of stop nodes
 		
 		if (stopNodesIds.size()==0) {
 			
-			Log.warning("PTv2: Relation #"+relation.getId()+" does not have any stop node");
+			Coord nodeCoord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Relation does not have any stop node";
+			
+			addNodeToGeoJson(ErrorLevel.MEDIUM, nodeCoord, relation.getId(), description);
 			
 			return;
 		}
 		
+		// Check that there are at least 2 stop nodes
 		if (stopNodesIds.size()<2) {
 			
-			Log.warning("PTv2: Relation #"+relation.getId()+" has only 1 stop node. It must have at least 2 (start and stop)");
+			Coord nodeCoord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Relation has only 1 stop node. It must have at least 2 (start and stop)";
+			
+			addNodeToGeoJson(ErrorLevel.MEDIUM, nodeCoord, relation.getId(), description);
 		}
 		
-		if ((waysIds.size()!=0) && (waysIds.size()!=(linkNodesIds.size()+1))) {
+		// Check that numWays == (numLinkNodes-1)
+		if ((waysIds.size() != 0) && (waysIds.size() != (linkNodesIds.size() + 1))) {
 			
-			Log.warning("PTv2: Relation #"+relation.getId()+": num ways="+
-					waysIds.size()+" is not num links="+linkNodesIds.size()+"+1");
-		
+			Coord nodeCoord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Num ways=" + waysIds.size() + " is not num links=" +
+					linkNodesIds.size() + "+1";
+			
+			addNodeToGeoJson(ErrorLevel.MEDIUM, nodeCoord, relation.getId(), description);
+			
+			return;
 		}
 		
-		for(int i=0; i<waysIds.size(); i++) {
+		// Step #5: Check first & last stop node position and correct direction of ways...
+		
+		for(int i=0; i < waysIds.size(); i++) {
 			
-			Way way=mDatabase.getWayById(waysIds.get(i));
+			Way way = mDatabase.getWayById(waysIds.get(i));
 			
-			MyWay myWay=new MyWay(way);
+			MyWay myWay = new MyWay(way);
 			
-			long nodeId1=myWay.getFirstNodeId();
-			long nodeId2=myWay.getLastNodeId();
+			long nodeId1 = myWay.getFirstNodeId();
+			long nodeId2 = myWay.getLastNodeId();
 			
-			//long prevLinkId;
 			long nextLinkId;
 			
-			int wayDir=UNKNOWN;			
+			int wayDir = UNKNOWN;			
 			
 			if (i==0) {
 				
@@ -634,8 +745,8 @@ public class PTv2Checker {
 				
 				long startNodeId=stopNodesIds.get(0);
 				
-				//Log.debug("PTv2: startNodeId: "+startNodeId);
-				//Log.debug("PTv2: first way Id: "+startNodeId);
+				Log.debug("PTv2: startNodeId: "+startNodeId);
+				Log.debug("PTv2: first way Id: "+startNodeId);
 				
 				boolean startNodeFound;
 				
@@ -710,11 +821,12 @@ public class PTv2Checker {
 				
 				if (!startNodeFound) {
 					
-					Log.warning("PTv2: Relation #"+relation.getId()+": First stop node not detected in first way");
+					Coord nodeCoord = mDatabase.getRelationCoord(relation);
+					
+					String description = "First stop node not detected in first way";
+					
+					addNodeToGeoJson(ErrorLevel.LOW, nodeCoord, relation.getId(), description);
 				}
-				
-								
-				//Log.debug("PTv2 way order is "+(ascending? "ascending":"descending"));
 			}
 			else if (i==(waysIds.size()-1)) {
 				
@@ -800,7 +912,11 @@ public class PTv2Checker {
 				
 				if (!endNodeFound) {
 					
-					Log.warning("PTv2: Relation #"+relation.getId()+": End stop node not detected in last way");
+					Coord nodeCoord = mDatabase.getRelationCoord(relation);
+					
+					String description = "End stop node not detected in last way";
+					
+					addNodeToGeoJson(ErrorLevel.LOW, nodeCoord, relation.getId(), description);
 				}
 			}
 			else {
@@ -844,7 +960,11 @@ public class PTv2Checker {
 			
 			if (type==null) {
 				
-				Log.warning("PTv2: Relation #"+relation.getId()+": Way <"+way.getId()+"> is not a highway");
+				Coord nodeCoord = mDatabase.getWayCoord(way);
+				
+				String description = "<Way #"+way.getId()+"> is not a highway";
+				
+				addNodeToGeoJson(ErrorLevel.LOW, nodeCoord, relation.getId(), description);
 				
 				break;
 			}
@@ -867,8 +987,11 @@ public class PTv2Checker {
 			}
 			else {
 				
-				Log.warning("PTv2: Relation #"+relation.getId()+": incorrect <highway> tag <"+type+"> of way <"+
-						way.getId()+"> is not correct");
+				Coord nodeCoord = mDatabase.getWayCoord(way);
+				
+				String description = "Incorrect 'highway' tag '"+type+"' of <Way #"+way.getId()+"> is not correct";
+				
+				addNodeToGeoJson(ErrorLevel.LOW, nodeCoord, relation.getId(), description);
 			}
 			
 			boolean isLink=type.endsWith("_link");
@@ -881,7 +1004,11 @@ public class PTv2Checker {
 				
 				if (wayDir==UNKNOWN) {
 					
-					Log.warning("PTv2: Relation #"+relation.getId()+": Direction of way <"+way.getId()+"> is unknown");
+					Coord coord = mDatabase.getWayCoord(way);
+					
+					String description = "Direction of <Way #"+way.getId()+"> is unknown";
+					
+					addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);
 				}
 				else if (wayDir==ASCENDING || wayDir==DESCENDING) {
 					
@@ -897,33 +1024,44 @@ public class PTv2Checker {
 					
 					if (wayDir==ASCENDING && oneway==myWay.ONEWAY_BACKWARD) {
 						
-						Log.warning("PTv2: Relation #"+relation.getId()+": Direction of way <"+way.getId()+"> is backward");						
+						Coord coord = mDatabase.getWayCoord(way);
+						
+						String description = "Direction of <Way #"+way.getId()+"> is backward";
+						
+						addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);
 					}
 					else if (wayDir==DESCENDING && oneway==myWay.ONEWAY_FORWARD) {
 						
-						Log.warning("PTv2: Relation #"+relation.getId()+": Direction of way <"+way.getId()+"> is forward");						
+						Coord coord = mDatabase.getWayCoord(way);
+						
+						String description = "Direction of <Way #"+way.getId()+"> is forward";
+						
+						addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);
 					}					
 					
 				}
 				else {
 					
-					Log.warning("PTv2: Relation #"+relation.getId()+": Direction of way <"+way.getId()+"> is not correct");
+					Coord coord = mDatabase.getWayCoord(way);
+					
+					String description = "Direction of <Way #"+way.getId()+"> is not correct";
+					
+					addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);
 				}
 			}
 		}
 		
-		// Step #5: Check order of stop nodes
+		// Step #6: Check order of stop nodes
 		
 		if (!orderedRoute) {
 			
-			// This is not an ordered route. Skip check
-			
+			// This is not an ordered route. Skip check...			
 			return;
 		}
 		
 		// First, get list of all the nodes of the route
 		
-		List<Long> routeNodes=new ArrayList<Long>();
+		List<Long> routeNodes = new ArrayList<Long>();
 		
 		for(int i=0; i<waysIds.size(); i++) {
 			
@@ -967,20 +1105,21 @@ public class PTv2Checker {
 				else if (nodeId2==linkNodesIds.get(i)) {
 					
 					wayDir=ASCENDING;
-				}
-		
+				}		
 			}
 			
-			if (wayDir==UNKNOWN) {
+			if (wayDir == UNKNOWN) {
 				
-				Log.warning("PTv2: Relation #"+relation.getId()+": Order stop nodes. Link node not found in way <"+way.getId()+">");
+				Coord coord = mDatabase.getWayCoord(way);
+				
+				String description = "Order stop nodes. Link node not found in <Way #" + way.getId() + ">";
+				
+				addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 				
 				continue;				
 			}
 			
-			List<WayNode> wayNodes=way.getWayNodes();
-			
-			//int numNodesToAdd;
+			List<WayNode> wayNodes = way.getWayNodes();
 			
 			int offset;
 			
@@ -988,26 +1127,23 @@ public class PTv2Checker {
 				
 				// For the last way, add all the nodes
 				
-				//numNodesToAdd=wayNodes.size();
 				offset=0;
 			}
 			else {
 				
-				// For the rest of ways, add all the nodes but the last one
-				
-				//numNodesToAdd=wayNodes.size()-1;
+				// For the rest of ways, add all the nodes but not the last one
 				
 				offset=1;
 			}
 			
-			if (wayDir==ASCENDING) {
+			if (wayDir == ASCENDING) {
 				
 				for(int j=0; j<(wayNodes.size()-offset); j++) {
 					
 					routeNodes.add(wayNodes.get(j).getNodeId());					
 				}
 			}
-			else if (wayDir==DESCENDING) {
+			else if (wayDir == DESCENDING) {
 				
 				for(int j=(wayNodes.size()-1); j>=offset; j--) {
 					
@@ -1017,28 +1153,59 @@ public class PTv2Checker {
 			}
 			else {
 				
-				Log.warning("PTv2: Relation #"+relation.getId()+": Order of way <"+way.getId()+"> is unknown");
+				Coord coord = mDatabase.getWayCoord(way);
 				
+				String description = "Order of <Way #" + way.getId() + "> is unknown";
+				
+				addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 			}
 		}
 		
-		//Log.info("PTv2: Relation #"+relation.getId()+": Number of route nodes: "+routeNodes.size());
+		Log.debug("PTv2: Relation #"+relation.getId() + ": Number of route nodes: " + routeNodes.size());
 		
-		int startPos=0;
+		// Go through all stop nodes and check that they are ordered...
 		
-		for(int i=0; i<stopNodesIds.size(); i++) {
+		int startPos = 0;
+		
+		for(int i=0; i < stopNodesIds.size(); i++) {
 			
-			long stopNodeId=stopNodesIds.get(i);
+			long stopNodeId = stopNodesIds.get(i);
 			
-			int pos=startPos;
+			// First, check that stop node belongs to route...
 			
-			boolean stopNodeFound=false;
+			boolean stopNodeFound = false;
 			
-			while (pos<routeNodes.size()) {
+			for(int j=0; j<routeNodes.size(); j++) {
 				
-				if (stopNodeId==routeNodes.get(pos)) {
+				if (routeNodes.get(j) == stopNodeId) {
 					
-					stopNodeFound=true;
+					stopNodeFound = true;
+					
+					break;
+				}
+			}
+			
+			if (!stopNodeFound) {
+				
+				Coord coord = mDatabase.getNodeCoord(stopNodeId);
+				
+				String description = "Stop <Node #" + stopNodeId + "> does not belong to route";
+				
+				addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
+				
+				// Go to next stop node...
+				continue;
+			}
+			
+			int pos = startPos;
+			
+			stopNodeFound = false;
+			
+			while (pos < routeNodes.size()) {
+				
+				if (stopNodeId == routeNodes.get(pos)) {
+					
+					stopNodeFound = true;
 					
 					break;
 				}
@@ -1048,19 +1215,28 @@ public class PTv2Checker {
 			
 			if (stopNodeFound) {
 				
-				startPos=pos;
+				// Stop node has been found in total list of nodes
+				// Set next search start position
+				startPos = pos;
 			}
 			else {
 				
-				Log.warning("PTv2: Relation #"+relation.getId()+": Stop node <"+stopNodeId+"> is not ordered");
+				// Stop node has not been found, then it's not ordered...
 				
+				Coord coord = mDatabase.getNodeCoord(stopNodeId);
+				
+				String description = "Stop <Node #" + stopNodeId + "> is not ordered";
+				
+				addNodeToGeoJson(ErrorLevel.LOW, coord, relation.getId(), description);
+				
+				/*
 				pos=0;
 				
-				while (pos<startPos) {
+				while (pos < startPos) {
 					
-					if (stopNodeId==routeNodes.get(pos)) {
+					if (stopNodeId == routeNodes.get(pos)) {
 						
-						stopNodeFound=true;
+						stopNodeFound = true;
 						
 						break;
 					}
@@ -1070,53 +1246,133 @@ public class PTv2Checker {
 				
 				if (stopNodeFound) {
 					
-					startPos=pos;
+					startPos = pos;
 				}
 				else {
 					
-					Log.warning("PTv2: Relation #"+relation.getId()+": Stop node <"+stopNodeId+"> not found in route");					
+					coord = mDatabase.getNodeCoord(stopNodeId);
+					
+					description = "Stop <Node #"+stopNodeId+"> not found in route";
+					
+					addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 				}
-		
-			}
-			
-		}
-		
-		/*
-		List<Integer> stopNodesOrder=new ArrayList<Integer>();
-		
-		// Reset stop nodes order index
-		
-		while(stopNodesOrder.size()<stopNodesIds.size()) {
-			
-			stopNodesOrder.add(-1);
-		}
-		
-		int currentNodePos=0;
-		*/
-		
-		
+				*/
+			}			
+		}		
 	}
 	
-	private void addNodeToGeoJson(Coord coord, long relationId, String description) {
+	private void addNodeToGeoJson(ErrorLevel level, Coord coord, long relationId, String description) {
 		
 		Attributes attribs = new Attributes();
 		
-		String title = "PTv2 ERROR";
+		// Set error level
+		
+		String errorLevelString;
+		
+		switch (level) {
+		
+		case HIGH:
+			errorLevelString = "HIGH";
+			break;
+		
+		case MEDIUM:
+			errorLevelString = "MEDIUM";
+			break;
+		
+		case LOW:
+			errorLevelString = "LOW";
+			break;
+		
+		default:
+			errorLevelString = "LOW";
+			break;
+		}
+		
+		attribs.put("level", errorLevelString);
+		
+		// Get bus line ref
+		
+		String busLineRef = mDatabase.getRelationTagValue(relationId, "ref");
+		
+		if (busLineRef == null) {
+			
+			busLineRef = "????";
+		}
+		
+		attribs.put("title", "Bus Ref. " + busLineRef);
 		
 		String relation = String.format(Locale.US,
 				"<a href='https://www.openstreetmap.org/relation/%d' target='_blank'>Rel #%d</a>",
 				relationId, relationId);
 		
-		attribs.put("title", title);
 		attribs.put("relation", relation);
+		
+		// Replace string '<Node #' with link
+		int startPos = description.indexOf("<Node #");
+		
+		if (startPos>=0) {
+			
+			int endPos = description.indexOf(">");
+			
+			if (endPos < 0) {
+				
+				Log.error("No endPos while searching for '>' in description");
+			}
+			else {
+				
+				long nodeId = Long.parseLong(description.substring(startPos+7, endPos));
+				
+				String newDescription = description.substring(0, startPos);
+				
+				newDescription += String.format(Locale.US,
+						"<a href='https://www.openstreetmap.org/node/%d' target='_blank'>Node #%d</a>",
+						nodeId, nodeId);
+				
+				newDescription += description.substring(endPos+1);
+				
+				description = newDescription;
+			}
+		}
+		
+		// Replace string '<Way #' with link
+		startPos = description.indexOf("<Way #");
+		
+		if (startPos>=0) {
+			
+			int endPos = description.indexOf(">");
+			
+			if (endPos < 0) {
+				
+				Log.error("No endPos while searching for '>' in description");
+			}
+			else {
+				
+				long wayId = Long.parseLong(description.substring(startPos+6, endPos));
+				
+				String newDescription = description.substring(0, startPos);
+				
+				newDescription += String.format(Locale.US,
+						"<a href='https://www.openstreetmap.org/way/%d' target='_blank'>Way #%d</a>",
+						wayId, wayId);
+				
+				newDescription += description.substring(endPos+1);
+				
+				description = newDescription;
+			}
+		}
+		
 		attribs.put("description", description);
+		
+		if (coord == null) {
+			
+			Log.warning("addNodeToGeoJson() coord==null. Setting coord to (0.0, 0.0)");
+			
+			coord = new Coord(0.0, 0.0);
+		}
 		
 		if (mOutFile != null) {
 			
 			mOutFile.addNode(coord, attribs);
 		}
-		
-		Log.data(title+": Rel #"+relationId+": "+description);
 	}
-
 }

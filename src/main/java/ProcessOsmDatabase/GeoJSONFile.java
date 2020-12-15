@@ -40,6 +40,8 @@ public class GeoJSONFile {
 	
 	private boolean mFirstFeature = true;
 	
+	private int mNodeCount;
+	
 	public GeoJSONFile(String fileName, String generator) {
 		
 		try {
@@ -62,6 +64,8 @@ public class GeoJSONFile {
 			
 			Log.error("GeoJSONFile. FileWriter error: "+e.getMessage());
 		}
+		
+		mNodeCount = 0;
 	}
 	
 	public void close() {
@@ -144,5 +148,11 @@ public class GeoJSONFile {
 		mWriter.println(FEATURE_LINE_09);
 		mWriter.print(FEATURE_LINE_10);
 		
+		mNodeCount++;
+	}
+	
+	public int getNodeCount() {
+		
+		return mNodeCount;
 	}
 }

@@ -1,6 +1,9 @@
 package ProcessOsmDatabase;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.time.Duration;
@@ -46,6 +49,8 @@ public class ProcessOsmDatabase {
 	
 	private static GeoJSONFile mOutputGeoJsonFile = null;
 	
+	private static boolean mFilter = false;
+	
 	public static void main(String[] args) {
 		
 		Log.info("Starting ProcessOsmDatabase...");
@@ -57,7 +62,19 @@ public class ProcessOsmDatabase {
 			return;
 		}
 		
-		mPTv2Checker = new PTv2Checker();
+		for(int i=0; i<args.length; i++) {
+			
+			if (args[i].compareTo("--debug") == 0) {
+				
+				Log.showDebugLogs(true);
+			}
+			else if (args[i].compareTo("--filter") == 0) {
+				
+				mFilter = true;
+			}
+		}
+		
+		Log.info("Show debug logs: " + Log.isShowDebugEnabled());
 		
 		// Set input XML file name
 		
@@ -83,6 +100,34 @@ public class ProcessOsmDatabase {
 		Log.info("Output GeoJSON file <" + outputGeoJsonFileName + ">");
 		
 		mOutputGeoJsonFile = new GeoJSONFile(outputGeoJsonFileName, APP_NAME);
+		
+		// Open filter file, if enabled...
+		
+		Log.info("Filtering is enabled: " + mFilter);
+		
+		List<Long> relsToProcess = null;
+		
+		if (mFilter) {
+			
+			// Open input filter name
+			
+			index = inputXmlFileName.indexOf(".xml");
+			
+			String inputFilterFileName;
+			
+			if (index < 0) {
+				
+				inputFilterFileName = inputXmlFileName + ".filter";
+			}
+			else {
+				
+				inputFilterFileName = inputXmlFileName.substring(0, index) + ".filter";
+			}
+			
+			relsToProcess = readFilterFile(inputFilterFileName);
+		}
+		
+		mPTv2Checker = new PTv2Checker(relsToProcess);
 		
 		Log.info("Processing input XML file <" + inputXmlFileName + ">...");
 		
@@ -131,6 +176,8 @@ public class ProcessOsmDatabase {
 		Log.info("Processing nodes...");
 		
 		processElement(mainElement);
+		
+		Log.info("Added "+mOutputGeoJsonFile.getNodeCount()+" nodes to GeoJsonFile");
 		
 		// Close output GeoJSON file...
 		mOutputGeoJsonFile.close();
@@ -440,6 +487,61 @@ public class ProcessOsmDatabase {
 		}
 		
 		return true;		
+	}
+	
+	private static List<Long> readFilterFile(String inputFilterFileName) {
+		
+		ArrayList<Long> relsToProcess = new ArrayList<Long>();
+		
+		Log.info("Input filter file name: <" + inputFilterFileName + ">");
+		
+		try {
+			
+			BufferedReader reader = new BufferedReader(new FileReader(inputFilterFileName));
+			
+			String line;
+			
+			while((line = reader.readLine()) != null) {
+				
+				line = line.trim();
+				
+				if (line.isEmpty()) {
+					
+					continue;
+				}
+				
+				Log.debug("Filter line: " + line);
+				
+				try {
+					
+					long id = Long.parseLong(line.trim());
+					
+					Log.info("Add relation #" + id + " to filter");
+					
+					relsToProcess.add(id);
+				}
+				catch (NumberFormatException e) {
+					
+					Log.error("Parsing filter line <"+line.trim()+"> error: " + e.getMessage());
+				}
+			}
+			
+			reader.close();
+			
+		} catch (FileNotFoundException e) {
+			
+			Log.error("Filter FileReader error: " + e.getMessage());
+			
+			relsToProcess = null;
+		}
+		catch (IOException e) {
+		
+			Log.error("Filter FileReader error: " + e.getMessage());
+			
+			relsToProcess = null;
+		}
+		
+		return relsToProcess;
 	}
 	
 	/*
