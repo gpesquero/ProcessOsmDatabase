@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 
@@ -19,18 +20,20 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
-import org.apache.commons.math3.util.Pair;
-
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NamedNodeMap;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
-
+import org.openstreetmap.osmosis.core.domain.v0_6.CommonEntityData;
+import org.openstreetmap.osmosis.core.domain.v0_6.OsmUser;
 import org.openstreetmap.osmosis.core.domain.v0_6.Relation;
 import org.openstreetmap.osmosis.core.domain.v0_6.Tag;
+import org.openstreetmap.osmosis.core.domain.v0_6.Way;
+import org.openstreetmap.osmosis.core.domain.v0_6.WayNode;
 import org.utilslibrary.Log;
+import org.utilslibrary.MyPair;
 import org.utilslibrary.OsmDatabase;
 
 public class ProcessOsmDatabase {
@@ -47,9 +50,11 @@ public class ProcessOsmDatabase {
 	
 	private static PTv2Checker mPTv2Checker = null;
 	
-	private static GeoJSONFile mOutputGeoJsonFile = null;
+	private static GeoJSONFile mOutputGeoJsonFiles[] = null;
 	
 	private static boolean mFilter = false;
+	
+	private static String mDataDir = null;
 	
 	public static void main(String[] args) {
 		
@@ -72,34 +77,21 @@ public class ProcessOsmDatabase {
 				
 				mFilter = true;
 			}
+			else if (args[i].startsWith("--dataDir=")) {
+				
+				mDataDir = args[i].substring(new String("--dataDir=").length());
+			}
 		}
 		
 		Log.info("Show debug logs: " + Log.isShowDebugEnabled());
+		
+		Log.info("Data dir: " + mDataDir);
 		
 		// Set input XML file name
 		
 		String inputXmlFileName = args[0];
 		
 		Log.info("Input XML file <"+inputXmlFileName+">...");
-		
-		// Set output GeoJSON file name
-		
-		int index = inputXmlFileName.indexOf(".xml");
-		
-		String outputGeoJsonFileName;
-		
-		if (index < 0) {
-			
-			outputGeoJsonFileName = inputXmlFileName + ".geojson";
-		}
-		else {
-			
-			outputGeoJsonFileName = inputXmlFileName.substring(0, index) + ".geojson";
-		}
-		
-		Log.info("Output GeoJSON file <" + outputGeoJsonFileName + ">");
-		
-		mOutputGeoJsonFile = new GeoJSONFile(outputGeoJsonFileName, APP_NAME);
 		
 		// Open filter file, if enabled...
 		
@@ -111,7 +103,7 @@ public class ProcessOsmDatabase {
 			
 			// Open input filter name
 			
-			index = inputXmlFileName.indexOf(".xml");
+			int index = inputXmlFileName.indexOf(".xml");
 			
 			String inputFilterFileName;
 			
@@ -169,7 +161,26 @@ public class ProcessOsmDatabase {
 			return;
 		}
 		
-		mPath=file.getParent();
+		mPath = file.getParent();
+		
+		if (mDataDir != null) {
+			
+			mPath += "/" + mDataDir;
+		}
+		
+		mOutputGeoJsonFiles = new GeoJSONFile[3];
+		
+		String outputGeoJsonFileNameHigh = mPath + "/" + "errors_high.geojson";
+		mOutputGeoJsonFiles[0] = new GeoJSONFile(outputGeoJsonFileNameHigh, APP_NAME);
+		Log.info("Output GeoJSON file <" + outputGeoJsonFileNameHigh + ">");
+		
+		String outputGeoJsonFileNameMedium = mPath + "/" + "errors_medium.geojson";
+		mOutputGeoJsonFiles[1] = new GeoJSONFile(outputGeoJsonFileNameMedium, APP_NAME);
+		Log.info("Output GeoJSON file <" + outputGeoJsonFileNameMedium + ">");
+		
+		String outputGeoJsonFileNameLow = mPath + "/" + "errors_low.geojson";
+		mOutputGeoJsonFiles[2] = new GeoJSONFile(outputGeoJsonFileNameLow, APP_NAME);
+		Log.info("Output GeoJSON file <" + outputGeoJsonFileNameLow + ">");
 		
 		Element mainElement=document.getDocumentElement();
 		
@@ -177,10 +188,19 @@ public class ProcessOsmDatabase {
 		
 		processElement(mainElement);
 		
-		Log.info("Added "+mOutputGeoJsonFile.getNodeCount()+" nodes to GeoJsonFile");
+		Log.info("Added " + mOutputGeoJsonFiles[0].getNodeCount() + " nodes to GeoJsonFile (Level High)");
+		Log.info("Added " + mOutputGeoJsonFiles[1].getNodeCount() + " nodes to GeoJsonFile (Level Medium)");
+		Log.info("Added " + mOutputGeoJsonFiles[2].getNodeCount() + " nodes to GeoJsonFile (Level Low)");
 		
-		// Close output GeoJSON file...
-		mOutputGeoJsonFile.close();
+		// Close output GeoJSON files...
+		mOutputGeoJsonFiles[0].close();
+		mOutputGeoJsonFiles[1].close();
+		mOutputGeoJsonFiles[2].close();
+		
+		if (mDatabase != null) {
+			
+			createBoundaryFile();
+		}
 		
 		Log.info("ProcessOsmDatabase finished...");
 	}
@@ -202,7 +222,7 @@ public class ProcessOsmDatabase {
 				
 				mPTv2Checker.setOsmDatabase(mDatabase);
 				
-				mPTv2Checker.setGeoJSONFile(mOutputGeoJsonFile);
+				mPTv2Checker.setGeoJSONFiles(mOutputGeoJsonFiles);
 			}
 		}
 		else if (element.getNodeName().compareTo("relation")==0) {
@@ -246,41 +266,41 @@ public class ProcessOsmDatabase {
 				return false;
 			}
 			
-			NamedNodeMap map=element.getAttributes();
+			NamedNodeMap map = element.getAttributes();
 			
 			for (int i=0; i<map.getLength(); i++) {
 				
-				Node n=map.item(i);
+				Node n = map.item(i);
 				
-				String key=n.getNodeName();
-				String value=n.getNodeValue();
+				String key = n.getNodeName();
+				String value = n.getNodeValue();
 				
 				tags.add(new Tag(key, value));
 				
 			}
 		}
-		else if (element.getNodeName().compareTo("check")==0) {
+		else if (element.getNodeName().compareTo("check") == 0) {
 			
-			String text="Check with tags: ";
+			String text = "Check with tags: ";
 			
-			Iterator<Tag> iter=tags.iterator();
+			Iterator<Tag> iter = tags.iterator();
 			
 			while(iter.hasNext()) {
 				
-				Tag tag=iter.next();
+				Tag tag = iter.next();
 				
 				text+="'"+tag.getKey()+"'='"+tag.getValue()+"' ";
 			}
 			
 			Log.info(text);
 			
-			Instant start=Instant.now();
+			Instant start = Instant.now();
 			
-			List<Long> relIds=mDatabase.getRelationsIdsByTags(tags);
+			List<Long> relIds = mDatabase.getRelationsIdsByTags(tags);
 			
-			Instant end=Instant.now();
+			Instant end = Instant.now();
 		
-			Duration time=Duration.between(start, end);
+			Duration time = Duration.between(start, end);
 			
 			if (relIds==null) {
 				
@@ -319,7 +339,7 @@ public class ProcessOsmDatabase {
 						
 						Iterator<Long> iterRelIds=relIds.iterator();
 						
-						ArrayList<Pair<Long, String>> pairs=new ArrayList<Pair<Long, String>>();
+						ArrayList<MyPair<Long, String>> pairs = new ArrayList<MyPair<Long, String>>();
 						
 						while (iterRelIds.hasNext()) {
 							
@@ -341,36 +361,35 @@ public class ProcessOsmDatabase {
 									
 									ref=tag.getValue();
 									
-									pairs.add(new Pair<Long, String>(relId, ref));
+									pairs.add(new MyPair<Long, String>(relId, ref));
 									
 									break;
 								}
 							}
 						}
 						
-						Collections.sort(pairs, new Comparator<Pair<Long, String>>() {
+						Collections.sort(pairs, new Comparator<MyPair<Long, String>>() {
 							
 							@Override
-							public int compare(Pair<Long, String> o1, Pair<Long, String> o2) {
+							public int compare(MyPair<Long, String> o1, MyPair<Long, String> o2) {
 								
 								return o1.getValue().compareTo(o2.getValue());
 							}
 						});
 						
-						Iterator<Pair<Long, String>> iterPairs=pairs.iterator();
+						Iterator<MyPair<Long, String>> iterPairs=pairs.iterator();
 						
 						int pos=1;
 						
 						while(iterPairs.hasNext()) {
 							
-							Pair<Long, String> pair=iterPairs.next();
+							MyPair<Long, String> pair=iterPairs.next();
 							
 							Log.warning("   "+String.format("[%02d]", pos)+" Ref <"+pair.getValue()+"> of relation with id #"+pair.getKey());
 							
 							pos++;
 						}						
-					}					
-					
+					}				
 				}
 				else if (key.compareTo("route")==0) {
 					
@@ -395,14 +414,12 @@ public class ProcessOsmDatabase {
 				else {
 					
 					Log.error("Unknown check key <"+key+"> and value <"+value+">");
-				}
-				
-			}
-			
+				}				
+			}			
 		}
 		else {
 			
-			Log.warning("Unknown XML element <"+element.getNodeName()+">");
+			Log.warning("Unknown XML element <" + element.getNodeName() + ">");
 			
 			return true;
 		}
@@ -411,9 +428,9 @@ public class ProcessOsmDatabase {
 		
 		for(int i=0; i<childNodes.getLength(); i++) {
 			
-			Node childNode=childNodes.item(i);
+			Node childNode = childNodes.item(i);
 			
-			if (childNode.getNodeType()!=Node.ELEMENT_NODE)
+			if (childNode.getNodeType() != Node.ELEMENT_NODE)
 				continue;
 			
 			ArrayList<Tag> childTags=null;
@@ -433,21 +450,21 @@ public class ProcessOsmDatabase {
 	
 	private static boolean openDataBase(Element element) {
 		
-		String mapFileName=element.getAttribute(XML_ATTRIB_FILE_NAME);
+		String mapFileName = element.getAttribute(XML_ATTRIB_FILE_NAME);
 		
 		if (mapFileName.isEmpty()) {
 			
-			Log.error("No attrib <"+XML_ATTRIB_FILE_NAME+
-					"> in XML node <"+XML_MAIN_NODE_NAME+">");
+			Log.error("No attrib <" + XML_ATTRIB_FILE_NAME +
+					"> in XML node <" + XML_MAIN_NODE_NAME + ">");
 			
-			return false;			
+			return false;
 		}
 		
-		Log.info("Map FileName: <"+mapFileName+">");
+		Log.info("Map FileName: <" + mapFileName + ">");
 		
-		Log.info("Map Folder: <"+mPath+">");
+		Log.info("Map Folder: <" + mPath + ">");
 		
-		File folder=new File(mPath);
+		File folder = new File(mPath);
 		
 		FilenameFilter filter = new FilenameFilter() {
 			
@@ -464,18 +481,18 @@ public class ProcessOsmDatabase {
 	        }
 	    };
 		
-		File[] mapDatabaseFiles=folder.listFiles(filter);
+		File[] mapDatabaseFiles = folder.listFiles(filter);
 		
-		if (mapDatabaseFiles.length<1) {
+		if ((mapDatabaseFiles == null) || (mapDatabaseFiles.length < 1)) {
 		
-			Log.error("No <"+mapFileName+"*.db> map files were found!");
+			Log.error("No <" + mapFileName + "*.db> map files were found!");
 			
 			return false;	
 		}
 		
-		File mapDatabaseFile=mapDatabaseFiles[0];
+		File mapDatabaseFile = mapDatabaseFiles[0];
 		
-		Log.info("Opening map database <"+mapDatabaseFile.getAbsolutePath()+">");
+		Log.info("Opening map database <" + mapDatabaseFile.getAbsolutePath() + ">");
 		
 		mDatabase = new OsmDatabase();
 		
@@ -483,7 +500,7 @@ public class ProcessOsmDatabase {
 			
 			Log.error("Error opening OSM Database");
 			
-			return false;			
+			return false;
 		}
 		
 		return true;		
@@ -542,6 +559,43 @@ public class ProcessOsmDatabase {
 		}
 		
 		return relsToProcess;
+	}
+	
+	private static void createBoundaryFile() {
+	
+		// Create boundary GeoJSON file...
+		
+		mDatabase.readDatabaseInfo();
+	
+		GeoJSONFile boundaryGeoJsonFile = new GeoJSONFile(mPath + "/" + "boundary.geojson", APP_NAME);
+		
+		long wayId = 0;
+		int version = 0;
+		Date timeStamp = null;
+		OsmUser user = null;
+		long changesetId = 0;
+		
+		Collection<Tag> wayTags = new ArrayList<Tag>();
+		
+		wayTags.add(new Tag("pbf_date", mDatabase.mPbfDateStamp));
+		wayTags.add(new Tag("pbf_time", mDatabase.mPbfTimeStamp));
+		
+		ArrayList<WayNode> wayNodes = new ArrayList<WayNode>();
+		
+		wayNodes.add(new WayNode(1, mDatabase.mMaxLat, mDatabase.mMinLon));
+		wayNodes.add(new WayNode(2, mDatabase.mMaxLat, mDatabase.mMaxLon));
+		wayNodes.add(new WayNode(3, mDatabase.mMinLat, mDatabase.mMaxLon));
+		wayNodes.add(new WayNode(4, mDatabase.mMinLat, mDatabase.mMinLon));
+		wayNodes.add(new WayNode(5, mDatabase.mMaxLat, mDatabase.mMinLon));
+		
+		CommonEntityData entityData = new CommonEntityData(wayId, version,
+				timeStamp, user, changesetId, wayTags);
+		
+		Way boundaryWay = new Way(entityData, wayNodes);
+		
+		boundaryGeoJsonFile.addWay(boundaryWay);
+		
+		boundaryGeoJsonFile.close();
 	}
 	
 	/*

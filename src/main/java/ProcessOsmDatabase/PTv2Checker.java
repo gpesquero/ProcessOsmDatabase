@@ -13,7 +13,6 @@ import org.openstreetmap.osmosis.core.domain.v0_6.RelationMember;
 import org.openstreetmap.osmosis.core.domain.v0_6.Tag;
 import org.openstreetmap.osmosis.core.domain.v0_6.Way;
 import org.openstreetmap.osmosis.core.domain.v0_6.WayNode;
-import org.utilslibrary.Attributes;
 import org.utilslibrary.Coord;
 import org.utilslibrary.Log;
 import org.utilslibrary.MyWay;
@@ -23,7 +22,9 @@ public class PTv2Checker {
 	
 	private OsmDatabase mDatabase = null;
 	
-	private GeoJSONFile mOutFile = null;
+	private GeoJSONFile mErrorFileLevelHigh = null;
+	private GeoJSONFile mErrorFileLevelMedium = null;
+	private GeoJSONFile mErrorFileLevelLow= null;
 	
 	private static final int UNKNOWN = -1;
 	private static final int ASCENDING = 0;
@@ -50,9 +51,11 @@ public class PTv2Checker {
 		mDatabase = database;
 	}
 	
-	public void setGeoJSONFile(GeoJSONFile outFile) {
+	public void setGeoJSONFiles(GeoJSONFile[] errorFiles) {
 		
-		mOutFile = outFile;
+		mErrorFileLevelHigh = errorFiles[0];
+		mErrorFileLevelMedium = errorFiles[1];
+		mErrorFileLevelLow = errorFiles[2];
 	}
 	
 	public void checkRelations(List<Long> relIds) {
@@ -1263,32 +1266,40 @@ public class PTv2Checker {
 	
 	private void addNodeToGeoJson(ErrorLevel level, Coord coord, long relationId, String description) {
 		
-		Attributes attribs = new Attributes();
+		//Attributes attribs = new Attributes();
+		
+		ArrayList<Tag> tags = new ArrayList<Tag>();
 		
 		// Set error level
 		
-		String errorLevelString;
+		GeoJSONFile outFile = null;
+		
+		//String errorLevelString;
 		
 		switch (level) {
 		
 		case HIGH:
-			errorLevelString = "HIGH";
+			//errorLevelString = "HIGH";
+			outFile = mErrorFileLevelHigh;
 			break;
 		
 		case MEDIUM:
-			errorLevelString = "MEDIUM";
+			//errorLevelString = "MEDIUM";
+			outFile = mErrorFileLevelMedium;
 			break;
 		
 		case LOW:
-			errorLevelString = "LOW";
+			//errorLevelString = "LOW";
+			outFile = mErrorFileLevelLow;
 			break;
 		
 		default:
-			errorLevelString = "LOW";
+			//errorLevelString = "LOW";
+			outFile = mErrorFileLevelLow;
 			break;
 		}
 		
-		attribs.put("level", errorLevelString);
+		//attribs.put("level", errorLevelString);
 		
 		// Get bus line ref
 		
@@ -1299,13 +1310,13 @@ public class PTv2Checker {
 			busLineRef = "????";
 		}
 		
-		attribs.put("title", "Bus Ref. " + busLineRef);
+		tags.add(new Tag("title", "Bus Ref. " + busLineRef));
 		
 		String relation = String.format(Locale.US,
 				"<a href='https://www.openstreetmap.org/relation/%d' target='_blank'>Rel #%d</a>",
 				relationId, relationId);
 		
-		attribs.put("relation", relation);
+		tags.add(new Tag("relation", relation));
 		
 		// Replace string '<Node #' with link
 		int startPos = description.indexOf("<Node #");
@@ -1361,7 +1372,7 @@ public class PTv2Checker {
 			}
 		}
 		
-		attribs.put("description", description);
+		tags.add(new Tag("description", description));
 		
 		if (coord == null) {
 			
@@ -1370,9 +1381,9 @@ public class PTv2Checker {
 			coord = new Coord(0.0, 0.0);
 		}
 		
-		if (mOutFile != null) {
+		if (outFile != null) {
 			
-			mOutFile.addNode(coord, attribs);
+			outFile.addNode(coord, tags);
 		}
 	}
 }
