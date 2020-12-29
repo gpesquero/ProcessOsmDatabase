@@ -32,13 +32,19 @@ import org.openstreetmap.osmosis.core.domain.v0_6.Relation;
 import org.openstreetmap.osmosis.core.domain.v0_6.Tag;
 import org.openstreetmap.osmosis.core.domain.v0_6.Way;
 import org.openstreetmap.osmosis.core.domain.v0_6.WayNode;
+import org.utilslibrary.GeoJSONFile;
 import org.utilslibrary.Log;
 import org.utilslibrary.MyPair;
 import org.utilslibrary.OsmDatabase;
+import org.utilslibrary.Util;
 
 public class ProcessOsmDatabase {
 	
 	private final static String APP_NAME = "ProcessOsmDatabase";
+	
+	private final static String APP_VERSION= "0.01";
+	
+	private final static String APP_DATE= "Dec 29th 2020";
 	
 	private final static String XML_MAIN_NODE_NAME = APP_NAME;
 	
@@ -58,7 +64,9 @@ public class ProcessOsmDatabase {
 	
 	public static void main(String[] args) {
 		
-		Log.info("Starting ProcessOsmDatabase...");
+		Log.info("Starting " + APP_NAME + " (v" + APP_VERSION + ", " + APP_DATE + ")...");
+		
+		Instant start = Instant.now();
 		
 		if (args.length<1) {
 			
@@ -182,7 +190,7 @@ public class ProcessOsmDatabase {
 		mOutputGeoJsonFiles[2] = new GeoJSONFile(outputGeoJsonFileNameLow, APP_NAME);
 		Log.info("Output GeoJSON file <" + outputGeoJsonFileNameLow + ">");
 		
-		Element mainElement=document.getDocumentElement();
+		Element mainElement = document.getDocumentElement();
 		
 		Log.info("Processing nodes...");
 		
@@ -202,7 +210,9 @@ public class ProcessOsmDatabase {
 			createBoundaryFile();
 		}
 		
-		Log.info("ProcessOsmDatabase finished...");
+		Instant end = Instant.now();
+		
+		Log.info(APP_NAME + " finished in " + Util.timeFormat(start, end) + "  !!");
 	}
 	
 	private static boolean processElement(Element element) {
