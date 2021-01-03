@@ -188,19 +188,13 @@ public class PTv2Checker {
 			
 			addNodeToGeoJson(ErrorLevel.HIGH, coord, relation.getId(), description);
 		}
-		else if (numberOfRoutes<2) {
-			
-			Coord coord = mDatabase.getRelationCoord(relation);
-			
-			String description = "Master Route only has 1 relation";
-			
-			addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
-		}
 	}
 	
 	public void checkRouteMaster(Relation relation) {
 		
-		boolean isBusRoute=false;
+		boolean isBusRoute = false;
+		boolean hasRefTag = false;
+		boolean hasColorTag = false;
 		
 		Collection<Tag> relTags=relation.getTags();
 		
@@ -214,8 +208,20 @@ public class PTv2Checker {
 				
 				if (tag.getValue().compareTo("bus")==0) {
 					
-					isBusRoute=true;
+					isBusRoute = true;
 				}
+			}
+			else if (tag.getKey().compareTo("ref") == 0) {
+				
+				hasRefTag = true;
+			}
+			else if (tag.getKey().compareTo("colour") == 0) {
+				
+				hasColorTag = true;
+			}
+			else if (tag.getKey().compareTo("color") == 0) {
+				
+				hasColorTag = true;
 			}
 		}
 		
@@ -226,6 +232,24 @@ public class PTv2Checker {
 			String description = "Master Route Relation is not a bus route";
 			
 			addNodeToGeoJson(ErrorLevel.HIGH, coord, relation.getId(), description);
+		}
+		
+		if (!hasRefTag) {
+			
+			Coord coord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Master Route Relation has no 'ref' tag";
+			
+			addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
+		}
+		
+		if (!hasColorTag) {
+			
+			Coord coord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Master Route Relation has no 'color' nor 'colour' tag";
+			
+			addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 		}
 		
 		int numberOfRoutes = 0;
@@ -301,8 +325,10 @@ public class PTv2Checker {
 		
 		// Step #1: Check for relation tags...
 		
-		boolean hasPTv2Tag = false;
+		boolean isBusRoute = false;
+		boolean hasRefTag = false;
 		boolean hasColorTag = false;
+		boolean hasPTv2Tag = false;
 		
 		Collection<Tag> relTags = relation.getTags();
 		
@@ -312,7 +338,18 @@ public class PTv2Checker {
 			
 			Tag tag = tagIter.next();
 			
-			if (tag.getKey().compareTo("public_transport:version") == 0) {
+			if (tag.getKey().compareTo("route")==0) {
+				
+				if (tag.getValue().compareTo("bus")==0) {
+					
+					isBusRoute = true;
+				}
+			}
+			else if (tag.getKey().compareTo("ref") == 0) {
+				
+				hasRefTag = true;
+			}
+			else if (tag.getKey().compareTo("public_transport:version") == 0) {
 				
 				if (tag.getValue().compareTo("2") == 0) {
 					
@@ -327,6 +364,24 @@ public class PTv2Checker {
 				
 				hasColorTag = true;
 			}
+		}
+		
+		if (!isBusRoute) {
+			
+			Coord coord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Route Relation is not a bus route";
+			
+			addNodeToGeoJson(ErrorLevel.HIGH, coord, relation.getId(), description);
+		}
+		
+		if (!hasRefTag) {
+			
+			Coord coord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Relation has no 'ref' tag";
+			
+			addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 		}
 		
 		if (!hasPTv2Tag) {
@@ -1060,32 +1115,33 @@ public class PTv2Checker {
 			
 			// Check if it's a valid way for public transport
 			
-			String type=myWay.getHighwayType();
+			String type = myWay.getHighwayType();
 			
-			if (type==null) {
+			if (type == null) {
 				
 				Coord nodeCoord = mDatabase.getWayCoord(way);
 				
-				String description = "<Way #"+way.getId()+"> is not a highway";
+				String description = "<Way #" + way.getId() + "> is not a highway";
 				
 				addNodeToGeoJson(ErrorLevel.MEDIUM, nodeCoord, relation.getId(), description);
 				
 				break;
 			}
-			else if (type.compareTo("motorway")==0 ||
-				type.compareTo("motorway_link")==0 ||
-				type.compareTo("trunk")==0 ||
-				type.compareTo("trunk_link")==0 ||
-				type.compareTo("primary")==0 ||
-				type.compareTo("primary_link")==0 ||
-				type.compareTo("secondary")==0 ||
-				type.compareTo("secondary_link")==0 ||
-				type.compareTo("tertiary")==0 ||
-				type.compareTo("tertiary_link")==0 ||
-				type.compareTo("unclassified")==0 ||
-				type.compareTo("residential")==0 ||
-				type.compareTo("service")==0 ||
-				type.compareTo("track")==0) {
+			else if (type.compareTo("motorway") == 0 ||
+				type.compareTo("motorway_link") == 0 ||
+				type.compareTo("trunk") == 0 ||
+				type.compareTo("trunk_link") == 0 ||
+				type.compareTo("primary") == 0 ||
+				type.compareTo("primary_link") == 0 ||
+				type.compareTo("secondary") == 0 ||
+				type.compareTo("secondary_link") == 0 ||
+				type.compareTo("tertiary") == 0 ||
+				type.compareTo("tertiary_link") == 0 ||
+				type.compareTo("unclassified") == 0 ||
+				type.compareTo("residential") == 0 ||
+				type.compareTo("living_street") == 0 ||
+				type.compareTo("service") == 0 ||
+				type.compareTo("track") == 0) {
 				
 				// This is a correct highway type
 			}
@@ -1093,36 +1149,37 @@ public class PTv2Checker {
 				
 				Coord nodeCoord = mDatabase.getWayCoord(way);
 				
-				String description = "Incorrect 'highway' tag '"+type+"' of <Way #"+way.getId()+"> is not correct";
+				String description = "Incorrect 'highway' tag '" + type + "' of <Way #" +
+						way.getId() + "> is not correct";
 				
 				addNodeToGeoJson(ErrorLevel.MEDIUM, nodeCoord, relation.getId(), description);
 			}
 			
-			boolean isLink=type.endsWith("_link");
+			boolean isLink = type.endsWith("_link");
 			
-			boolean isRoundabout=myWay.isRoundabout();
+			boolean isRoundabout = myWay.isRoundabout();
 			
 			// Check way direction
 			
 			if (orderedRoute) {
 				
-				if (wayDir==UNKNOWN) {
+				if (wayDir == UNKNOWN) {
 					
 					Coord coord = mDatabase.getWayCoord(way);
 					
-					String description = "Direction of <Way #"+way.getId()+"> is unknown";
+					String description = "Direction of <Way #" + way.getId() + "> is unknown";
 					
 					addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 				}
 				else if (wayDir==ASCENDING || wayDir==DESCENDING) {
 					
-					int oneway=myWay.getOneway();
+					int oneway = myWay.getOneway();
 					
-					if (oneway==myWay.NO_ONEWAY) {
+					if (oneway == myWay.NO_ONEWAY) {
 						
 						if (isLink || isRoundabout) {
 							
-							oneway=myWay.ONEWAY_FORWARD;
+							oneway = myWay.ONEWAY_FORWARD;
 						}
 					}
 					
@@ -1148,7 +1205,7 @@ public class PTv2Checker {
 					
 					Coord coord = mDatabase.getWayCoord(way);
 					
-					String description = "Direction of <Way #"+way.getId()+"> is not correct";
+					String description = "Direction of <Way #" + way.getId() + "> is not correct";
 					
 					addNodeToGeoJson(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 				}

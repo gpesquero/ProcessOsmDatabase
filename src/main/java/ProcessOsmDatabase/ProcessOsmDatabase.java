@@ -15,6 +15,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -27,8 +28,10 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 import org.openstreetmap.osmosis.core.domain.v0_6.CommonEntityData;
+import org.openstreetmap.osmosis.core.domain.v0_6.EntityType;
 import org.openstreetmap.osmosis.core.domain.v0_6.OsmUser;
 import org.openstreetmap.osmosis.core.domain.v0_6.Relation;
+import org.openstreetmap.osmosis.core.domain.v0_6.RelationMember;
 import org.openstreetmap.osmosis.core.domain.v0_6.Tag;
 import org.openstreetmap.osmosis.core.domain.v0_6.Way;
 import org.openstreetmap.osmosis.core.domain.v0_6.WayNode;
@@ -42,9 +45,9 @@ public class ProcessOsmDatabase {
 	
 	private final static String APP_NAME = "ProcessOsmDatabase";
 	
-	private final static String APP_VERSION= "0.01";
+	private final static String APP_VERSION= "0.02";
 	
-	private final static String APP_DATE= "Dec 29th 2020";
+	private final static String APP_DATE= "Jan 3rd 2021";
 	
 	private final static String XML_MAIN_NODE_NAME = APP_NAME;
 	
@@ -317,7 +320,7 @@ public class ProcessOsmDatabase {
 				Log.error("Check error!!!");
 			}
 			else
-				Log.info("Check found "+relIds.size()+" relations in "+time.toMillis()+" ms");
+				Log.info("Check found "+relIds.size()+" relation(s) in "+time.toMillis()+" ms");
 			
 			if (!element.hasAttributes()) {
 				
@@ -426,6 +429,67 @@ public class ProcessOsmDatabase {
 					Log.error("Unknown check key <"+key+"> and value <"+value+">");
 				}				
 			}			
+		}
+		else if (element.getNodeName().compareTo("list") == 0) {
+			
+			String text = "List with tags: ";
+			
+			Iterator<Tag> iter = tags.iterator();
+			
+			while(iter.hasNext()) {
+				
+				Tag tag = iter.next();
+				
+				text+="'"+tag.getKey()+"'='"+tag.getValue()+"' ";
+			}
+			
+			Log.info(text);
+			
+			Instant start = Instant.now();
+			
+			List<Long> relIds = mDatabase.getRelationsIdsByTags(tags);
+			
+			Instant end = Instant.now();
+		
+			Duration time = Duration.between(start, end);
+			
+			if (relIds == null) {
+				
+				Log.error("List error!!!");
+			}
+			else
+				Log.info("List found "+relIds.size()+" relation(s) in "+time.toMillis()+" ms");
+			
+			if (!element.hasAttributes()) {
+				
+				Log.error("List has no attributes");
+				
+				return false;
+			}
+			
+			NamedNodeMap nodeMap = element.getAttributes();
+			
+			for (int i=0; i<nodeMap.getLength(); i++) {
+				
+				Node n=nodeMap.item(i);
+				
+				String key=n.getNodeName();
+				String value=n.getNodeValue();
+				
+				if (key.compareTo("fileName") == 0) {
+					
+					String fileName = value;
+					
+					Log.info("List to fileName='" + fileName + "'");
+					
+					listRelMembersToFile(relIds.get(0), fileName);
+					
+				}
+				else {
+					
+					Log.error("Unknown list key <"+key+"> and value <"+value+">");
+				}	
+			}
 		}
 		else {
 			
@@ -606,6 +670,92 @@ public class ProcessOsmDatabase {
 		boundaryGeoJsonFile.addWay(boundaryWay);
 		
 		boundaryGeoJsonFile.close();
+	}
+	
+	private static void listRelMembersToFile(Long relId, String fileName) {
+		
+		List<RelationMember> members = mDatabase.getRelationMembers(relId);
+		
+		if (members == null) {
+			
+			Log.error("Error while getting members of relation #" + relId);
+			
+			return;
+		}
+		
+		ArrayList<String> memberNames = new ArrayList<String>();
+		
+		Iterator<RelationMember> iterMember = members.iterator();
+		
+		while(iterMember.hasNext()) {
+			
+			RelationMember member = iterMember.next();
+			
+			EntityType memberType = member.getMemberType();
+			
+			Collection<Tag> memberTags = null;
+			
+			String memberName;
+			
+			if (memberType == EntityType.Node) {
+				
+				memberTags = mDatabase.getNodeTags(member.getMemberId());
+				
+				memberName = "Node #" + member.getMemberId();
+			}
+			else if (memberType == EntityType.Way) {
+				
+				memberTags = mDatabase.getWayTags(member.getMemberId());
+				
+				memberName = "Way #" + member.getMemberId();
+			}
+			else if (memberType == EntityType.Relation) {
+				
+				memberTags = mDatabase.getRelationTags(member.getMemberId());
+				
+				memberName = "Relation #" + member.getMemberId();
+			}
+			else {
+				
+				Log.warning("ListRelMembersToFile. Unknown memberType");
+				
+				memberName = "Unknown #" + member.getMemberId();
+			}
+			
+			if (memberTags != null) {
+				
+				//String name = null;
+				
+				Iterator<Tag> iterTags = memberTags.iterator();
+				
+				while(iterTags.hasNext()) {
+					
+					Tag tag = iterTags.next();
+					
+					if (tag.getKey().compareTo("name") == 0) {
+						
+						memberName = tag.getValue();
+					}
+				}
+			}
+			
+			memberNames.add(memberName);
+		}
+		
+		Collections.sort(memberNames);
+		
+		int count = 0;
+		
+		Iterator<String> iterMemberNames = memberNames.iterator();
+		
+		while(iterMemberNames.hasNext()) {
+			
+			String memberName = iterMemberNames.next();
+			
+			count++;
+			
+			Log.debug(String.format(Locale.US,  "Pos %4d: ", count) + memberName);		
+		}
 	}
 	
 	/*
