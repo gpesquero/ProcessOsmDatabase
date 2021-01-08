@@ -45,13 +45,15 @@ public class ProcessOsmDatabase {
 	
 	private final static String APP_NAME = "ProcessOsmDatabase";
 	
-	private final static String APP_VERSION= "0.02";
+	private final static String APP_VERSION= "0.03";
 	
-	private final static String APP_DATE= "Jan 3rd 2021";
+	private final static String APP_DATE= "Jan 8th 2021";
 	
 	private final static String XML_MAIN_NODE_NAME = APP_NAME;
 	
-	private final static String XML_ATTRIB_FILE_NAME="filename";
+	private final static String XML_ATTRIB_INPUT_FILE_NAME = "inputFileName";
+	
+	private final static String XML_ATTRIB_OUTPUT_FILE_NAME = "outputFileName";
 	
 	private static String mPath = null;
 	
@@ -59,11 +61,17 @@ public class ProcessOsmDatabase {
 	
 	private static PTv2Checker mPTv2Checker = null;
 	
+	private static AdminBoundaryChecker mAdminBoundaryChecker = null;
+	
 	private static GeoJSONFile mOutputGeoJsonFiles[] = null;
 	
 	private static boolean mFilter = false;
 	
 	private static String mDataDir = null;
+	
+	private static int LEVEL_HIGH = 0;
+	private static int LEVEL_MEDIUM = 1;
+	private static int LEVEL_LOW = 2;
 	
 	public static void main(String[] args) {
 		
@@ -132,6 +140,8 @@ public class ProcessOsmDatabase {
 		
 		mPTv2Checker = new PTv2Checker(relsToProcess);
 		
+		mAdminBoundaryChecker = new AdminBoundaryChecker(relsToProcess);
+		
 		Log.info("Processing input XML file <" + inputXmlFileName + ">...");
 		
 		File file = new File(inputXmlFileName);
@@ -179,34 +189,23 @@ public class ProcessOsmDatabase {
 			mPath += "/" + mDataDir;
 		}
 		
-		mOutputGeoJsonFiles = new GeoJSONFile[3];
-		
-		String outputGeoJsonFileNameHigh = mPath + "/" + "errors_high.geojson";
-		mOutputGeoJsonFiles[0] = new GeoJSONFile(outputGeoJsonFileNameHigh, APP_NAME);
-		Log.info("Output GeoJSON file <" + outputGeoJsonFileNameHigh + ">");
-		
-		String outputGeoJsonFileNameMedium = mPath + "/" + "errors_medium.geojson";
-		mOutputGeoJsonFiles[1] = new GeoJSONFile(outputGeoJsonFileNameMedium, APP_NAME);
-		Log.info("Output GeoJSON file <" + outputGeoJsonFileNameMedium + ">");
-		
-		String outputGeoJsonFileNameLow = mPath + "/" + "errors_low.geojson";
-		mOutputGeoJsonFiles[2] = new GeoJSONFile(outputGeoJsonFileNameLow, APP_NAME);
-		Log.info("Output GeoJSON file <" + outputGeoJsonFileNameLow + ">");
-		
 		Element mainElement = document.getDocumentElement();
 		
 		Log.info("Processing nodes...");
 		
 		processElement(mainElement);
 		
-		Log.info("Added " + mOutputGeoJsonFiles[0].getNodeCount() + " nodes to GeoJsonFile (Level High)");
-		Log.info("Added " + mOutputGeoJsonFiles[1].getNodeCount() + " nodes to GeoJsonFile (Level Medium)");
-		Log.info("Added " + mOutputGeoJsonFiles[2].getNodeCount() + " nodes to GeoJsonFile (Level Low)");
+		if (mOutputGeoJsonFiles != null) {
+			
+			Log.info("Added " + mOutputGeoJsonFiles[LEVEL_HIGH].getNodeCount() + " nodes to GeoJsonFile (Level High)");
+			Log.info("Added " + mOutputGeoJsonFiles[LEVEL_MEDIUM].getNodeCount() + " nodes to GeoJsonFile (Level Medium)");
+			Log.info("Added " + mOutputGeoJsonFiles[LEVEL_LOW].getNodeCount() + " nodes to GeoJsonFile (Level Low)");
 		
-		// Close output GeoJSON files...
-		mOutputGeoJsonFiles[0].close();
-		mOutputGeoJsonFiles[1].close();
-		mOutputGeoJsonFiles[2].close();
+			// Close output GeoJSON files...
+			mOutputGeoJsonFiles[LEVEL_HIGH].close();
+			mOutputGeoJsonFiles[LEVEL_MEDIUM].close();
+			mOutputGeoJsonFiles[LEVEL_LOW].close();
+		}
 		
 		if (mDatabase != null) {
 			
@@ -233,9 +232,20 @@ public class ProcessOsmDatabase {
 			}
 			else {
 				
-				mPTv2Checker.setOsmDatabase(mDatabase);
+				String outputFileName = element.getAttribute(XML_ATTRIB_OUTPUT_FILE_NAME);
 				
+				if (outputFileName == null) {
+					
+					outputFileName = "";
+				}
+				
+				openOutputGeoJsonFiles(outputFileName);
+				
+				mPTv2Checker.setOsmDatabase(mDatabase);
 				mPTv2Checker.setGeoJSONFiles(mOutputGeoJsonFiles);
+				
+				mAdminBoundaryChecker.setOsmDatabase(mDatabase);
+				mAdminBoundaryChecker.setGeoJSONFiles(mOutputGeoJsonFiles);
 			}
 		}
 		else if (element.getNodeName().compareTo("relation")==0) {
@@ -320,7 +330,7 @@ public class ProcessOsmDatabase {
 				Log.error("Check error!!!");
 			}
 			else
-				Log.info("Check found "+relIds.size()+" relation(s) in "+time.toMillis()+" ms");
+				Log.info("Check found " + relIds.size() + " relation(s) in " + time.toMillis() + " ms");
 			
 			if (!element.hasAttributes()) {
 				
@@ -329,7 +339,7 @@ public class ProcessOsmDatabase {
 				return false;
 			}
 			
-			NamedNodeMap nodeMap=element.getAttributes();
+			NamedNodeMap nodeMap = element.getAttributes();
 			
 			for (int i=0; i<nodeMap.getLength(); i++) {
 				
@@ -340,29 +350,30 @@ public class ProcessOsmDatabase {
 				
 				if (key.compareTo("count")==0) {
 					
-					int count=Integer.valueOf(value);
+					int count = Integer.valueOf(value);
 					
-					if (count==relIds.size()) {
+					if (count == relIds.size()) {
 						
-						Log.info("Detected relations match with count <"+count+">");
+						Log.info("Detected relations match with count <" + count + ">");
 					}
 					else {
 						
-						Log.warning("Number of relations <"+relIds.size()+"> do not match count check <"+count+">");
+						Log.warning("Number of relations <" + relIds.size() +
+								"> do not match count check <" + count + ">");
 						
-						Iterator<Long> iterRelIds=relIds.iterator();
+						Iterator<Long> iterRelIds = relIds.iterator();
 						
 						ArrayList<MyPair<Long, String>> pairs = new ArrayList<MyPair<Long, String>>();
 						
 						while (iterRelIds.hasNext()) {
 							
-							Long relId=iterRelIds.next();
+							Long relId = iterRelIds.next();
 							
-							Relation relation=mDatabase.getRelationById(relId);
+							Relation relation = mDatabase.getRelationById(relId);
 							
-							Collection<Tag> relTags=relation.getTags();
+							Collection<Tag> relTags = relation.getTags();
 							
-							Iterator<Tag> iterRelTags=relTags.iterator();
+							Iterator<Tag> iterRelTags = relTags.iterator();
 							
 							String ref="<noref>";
 							
@@ -404,9 +415,9 @@ public class ProcessOsmDatabase {
 						}						
 					}				
 				}
-				else if (key.compareTo("route")==0) {
+				else if (key.compareTo("route") == 0) {
 					
-					if (value.compareTo("PTv2")==0) {
+					if (value.compareTo("PTv2") == 0) {
 						
 						Log.info("Checking route <PTv2>");
 						
@@ -421,6 +432,20 @@ public class ProcessOsmDatabase {
 					else {
 						
 						Log.error("Unknown value <"+value+"> for check <route>");						
+					}
+						
+				}
+				else if (key.compareTo("boundary") == 0) {
+					
+					if (value.compareTo("admin") == 0) {
+						
+						Log.info("Checking boundary <admin>");
+						
+						mAdminBoundaryChecker.checkRelations(relIds);					
+					}
+					else {
+						
+						Log.error("Unknown value <"+value+"> for check <boundary>");						
 					}
 						
 				}
@@ -524,11 +549,11 @@ public class ProcessOsmDatabase {
 	
 	private static boolean openDataBase(Element element) {
 		
-		String mapFileName = element.getAttribute(XML_ATTRIB_FILE_NAME);
+		String mapFileName = element.getAttribute(XML_ATTRIB_INPUT_FILE_NAME);
 		
 		if (mapFileName.isEmpty()) {
 			
-			Log.error("No attrib <" + XML_ATTRIB_FILE_NAME +
+			Log.error("No attrib <" + XML_ATTRIB_INPUT_FILE_NAME +
 					"> in XML node <" + XML_MAIN_NODE_NAME + ">");
 			
 			return false;
@@ -756,6 +781,33 @@ public class ProcessOsmDatabase {
 			
 			Log.debug(String.format(Locale.US,  "Pos %4d: ", count) + memberName);		
 		}
+	}
+	
+	private static void openOutputGeoJsonFiles(String outputFileName) {
+		
+		mOutputGeoJsonFiles = new GeoJSONFile[3];
+		
+		String baseFileName = mPath + "/" + "errors";
+		
+		if (outputFileName != null) {
+			
+			if (!outputFileName.isEmpty()) {
+				
+				baseFileName += "_" + outputFileName;
+			}
+		}
+		
+		String outputGeoJsonFileNameHigh = baseFileName + "_high.geojson";
+		mOutputGeoJsonFiles[LEVEL_HIGH] = new GeoJSONFile(outputGeoJsonFileNameHigh, APP_NAME);
+		Log.info("Output GeoJSON file <" + outputGeoJsonFileNameHigh + ">");
+		
+		String outputGeoJsonFileNameMedium = baseFileName + "_medium.geojson";
+		mOutputGeoJsonFiles[LEVEL_MEDIUM] = new GeoJSONFile(outputGeoJsonFileNameMedium, APP_NAME);
+		Log.info("Output GeoJSON file <" + outputGeoJsonFileNameMedium + ">");
+		
+		String outputGeoJsonFileNameLow = baseFileName + "_low.geojson";
+		mOutputGeoJsonFiles[LEVEL_LOW] = new GeoJSONFile(outputGeoJsonFileNameLow, APP_NAME);
+		Log.info("Output GeoJSON file <" + outputGeoJsonFileNameLow + ">");
 	}
 	
 	/*
