@@ -11,7 +11,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -30,14 +29,12 @@ import org.xml.sax.SAXException;
 import org.openstreetmap.osmosis.core.domain.v0_6.CommonEntityData;
 import org.openstreetmap.osmosis.core.domain.v0_6.EntityType;
 import org.openstreetmap.osmosis.core.domain.v0_6.OsmUser;
-import org.openstreetmap.osmosis.core.domain.v0_6.Relation;
 import org.openstreetmap.osmosis.core.domain.v0_6.RelationMember;
 import org.openstreetmap.osmosis.core.domain.v0_6.Tag;
 import org.openstreetmap.osmosis.core.domain.v0_6.Way;
 import org.openstreetmap.osmosis.core.domain.v0_6.WayNode;
 import org.utilslibrary.GeoJSONFile;
 import org.utilslibrary.Log;
-import org.utilslibrary.MyPair;
 import org.utilslibrary.OsmDatabase;
 import org.utilslibrary.Util;
 
@@ -45,9 +42,9 @@ public class ProcessOsmDatabase {
 	
 	private final static String APP_NAME = "ProcessOsmDatabase";
 	
-	private final static String APP_VERSION= "0.03";
+	private final static String APP_VERSION= "0.04";
 	
-	private final static String APP_DATE= "Jan 8th 2021";
+	private final static String APP_DATE= "Jan 10th 2021";
 	
 	private final static String XML_MAIN_NODE_NAME = APP_NAME;
 	
@@ -361,6 +358,7 @@ public class ProcessOsmDatabase {
 						Log.warning("Number of relations <" + relIds.size() +
 								"> do not match count check <" + count + ">");
 						
+						/*
 						Iterator<Long> iterRelIds = relIds.iterator();
 						
 						ArrayList<MyPair<Long, String>> pairs = new ArrayList<MyPair<Long, String>>();
@@ -412,7 +410,8 @@ public class ProcessOsmDatabase {
 							Log.warning("   "+String.format("[%02d]", pos)+" Ref <"+pair.getValue()+"> of relation with id #"+pair.getKey());
 							
 							pos++;
-						}						
+						}
+						*/						
 					}				
 				}
 				else if (key.compareTo("route") == 0) {

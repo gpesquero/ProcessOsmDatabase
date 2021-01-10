@@ -20,7 +20,16 @@ public class AdminBoundaryChecker extends BaseChecker {
 	protected void addErrorNode(ErrorLevel level, Coord coord,
 			long relationId, String description) {
 		
-		String title = "Admin Boundary";
+		// Get admin boundary name
+		
+		String adminName = mDatabase.getRelationTagValue(relationId, "name");
+						
+		if (adminName == null) {
+							
+			adminName = "????";
+		}
+		
+		String title = "Admin Boundary '" + adminName + "'";
 		
 		addNodeToGeoJson(level, coord, relationId, title, description);
 	}
@@ -120,7 +129,7 @@ public class AdminBoundaryChecker extends BaseChecker {
 			
 			Log.debug(description);
 			
-			addErrorNode(ErrorLevel.MEDIUM, coord, relationId, description);
+			addErrorNode(ErrorLevel.LOW, coord, relationId, description);
 		}
 	}
 }
