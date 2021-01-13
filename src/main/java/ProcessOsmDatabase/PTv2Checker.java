@@ -16,6 +16,7 @@ import org.openstreetmap.osmosis.core.domain.v0_6.WayNode;
 import org.utilslibrary.Coord;
 import org.utilslibrary.Log;
 import org.utilslibrary.MyWay;
+import org.utilslibrary.MyWay.Oneway;
 
 public class PTv2Checker extends BaseChecker {
 	
@@ -51,11 +52,11 @@ public class PTv2Checker extends BaseChecker {
 	
 	public void checkRelation(Relation relation) {
 		
-		boolean processed=false;
+		boolean processed = false;
 		
 		Collection<Tag> relTags = relation.getTags();
 		
-		Iterator<Tag> tagIter=relTags.iterator();
+		Iterator<Tag> tagIter = relTags.iterator();
 		
 		while(tagIter.hasNext()) {
 			
@@ -63,27 +64,27 @@ public class PTv2Checker extends BaseChecker {
 			
 			if (tag.getKey().compareTo("type")==0) {
 				
-				if (tag.getValue().compareTo("route")==0) {
+				if (tag.getValue().compareTo("route") == 0) {
 					
 					checkRoute(relation);
 					
-					processed=true;
+					processed = true;
 					
 					break;
 				}
-				else if (tag.getValue().compareTo("route_master")==0) {
+				else if (tag.getValue().compareTo("route_master") == 0) {
 				
 					checkRouteMaster(relation);
 					
-					processed=true;
+					processed = true;
 					
 					break;
 				}
-				else if (tag.getValue().compareTo("network")==0) {
+				else if (tag.getValue().compareTo("network") == 0) {
 					
 					checkNetwork(relation);
 					
-					processed=true;
+					processed = true;
 					
 					break;
 				}
@@ -1143,35 +1144,34 @@ public class PTv2Checker extends BaseChecker {
 					
 					addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 				}
-				else if (wayDir==ASCENDING || wayDir==DESCENDING) {
+				else if ((wayDir == ASCENDING) || (wayDir == DESCENDING)) {
 					
-					int oneway = myWay.getOneway();
+					Oneway oneway = myWay.getOneway();
 					
-					if (oneway == myWay.NO_ONEWAY) {
+					if (oneway == Oneway.UNDEF) {
 						
 						if (isLink || isRoundabout) {
 							
-							oneway = myWay.ONEWAY_FORWARD;
+							oneway = Oneway.FORWARD;
 						}
 					}
 					
-					if (wayDir==ASCENDING && oneway==myWay.ONEWAY_BACKWARD) {
+					if ((wayDir == ASCENDING) && (oneway == Oneway.BACKWARD)) {
 						
 						Coord coord = mDatabase.getWayCoord(way);
 						
-						String description = "Direction of <Way #"+way.getId()+"> is backward";
+						String description = "Direction of <Way #" + way.getId() + "> is backward";
 						
 						addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 					}
-					else if (wayDir==DESCENDING && oneway==myWay.ONEWAY_FORWARD) {
+					else if ((wayDir == DESCENDING) && (oneway == Oneway.FORWARD)) {
 						
 						Coord coord = mDatabase.getWayCoord(way);
 						
-						String description = "Direction of <Way #"+way.getId()+"> is forward";
+						String description = "Direction of <Way #" + way.getId() + "> is forward";
 						
 						addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
-					}					
-					
+					}			
 				}
 				else {
 					
@@ -1405,7 +1405,9 @@ public class PTv2Checker extends BaseChecker {
 			busLineRef = "????";
 		}
 		
-		addNodeToGeoJson(level, coord, relationId, busLineRef, description);
+		String title = "Bus Ref '" + busLineRef + "'";
+		
+		addNodeToGeoJson(level, coord, relationId, title, description);
 	}
 
 }

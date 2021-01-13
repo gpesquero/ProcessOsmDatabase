@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
+import org.openstreetmap.osmosis.core.domain.v0_6.EntityType;
 import org.openstreetmap.osmosis.core.domain.v0_6.Relation;
 import org.openstreetmap.osmosis.core.domain.v0_6.RelationMember;
 import org.openstreetmap.osmosis.core.domain.v0_6.Tag;
@@ -60,6 +61,8 @@ public class AdminBoundaryChecker extends BaseChecker {
 		boolean hasNameTag = false;
 		boolean hasAdminLevelTag = false;
 		
+		String adminLevelValue = null;
+		
 		Collection<Tag> relTags = relation.getTags();
 		
 		Iterator<Tag> tagIter = relTags.iterator();
@@ -75,6 +78,8 @@ public class AdminBoundaryChecker extends BaseChecker {
 			else if (tag.getKey().compareTo("admin_level")==0) {
 				
 				hasAdminLevelTag = true;
+				
+				adminLevelValue = tag.getValue();
 			}
 		}
 		
@@ -99,6 +104,32 @@ public class AdminBoundaryChecker extends BaseChecker {
 			
 			addErrorNode(ErrorLevel.MEDIUM, coord, relationId, description);
 		}
+		else {
+			
+			// Check adminLevel value
+			
+			try {
+				
+				int value = Integer.parseInt(adminLevelValue);
+				
+				if ((value<2) || (value>10)) {
+					
+					Coord coord = mDatabase.getRelationCoord(relation);
+					
+					String description = "'admin_level' value '" + adminLevelValue +"' out of range 2-10";
+					
+					addErrorNode(ErrorLevel.HIGH, coord, relationId, description);
+				}
+			}
+			catch(NumberFormatException e) {
+				
+				Coord coord = mDatabase.getRelationCoord(relation);
+				
+				String description = "Incorrect 'admin_level' value '" + adminLevelValue +"'";
+				
+				addErrorNode(ErrorLevel.HIGH, coord, relationId, description);
+			}
+		}
 		
 		// Check relation members....
 		
@@ -106,7 +137,20 @@ public class AdminBoundaryChecker extends BaseChecker {
 		
 		List<RelationMember> members = mDatabase.getRelationMembers(relationId);
 		
+		if (members.size() == 0) {
+			
+			Coord coord = mDatabase.getRelationCoord(relation);
+			
+			String description = "Relation does not have any member";
+			
+			Log.warning(description);
+			
+			addErrorNode(ErrorLevel.HIGH, coord, relationId, description);
+		}
+		
 		Iterator<RelationMember> iter = members.iterator();
+		
+		int pos = 0; 
 		
 		while(iter.hasNext()) {
 			
@@ -117,8 +161,60 @@ public class AdminBoundaryChecker extends BaseChecker {
 			if (role.compareTo("admin_centre") == 0) {
 				
 				hasAdminCentre = true;
+				
+				EntityType type = member.getMemberType();
+				
+				if (type != EntityType.Node) {
+					
+					Coord coord = mDatabase.getRelationCoord(relation);
+					
+					String description = "Relation member with role 'admin_centre' is not a node";
+					
+					addErrorNode(ErrorLevel.MEDIUM, coord, relationId, description);
+				}
+			}
+			else if (role.compareTo("outer") == 0) {
+				
+				// TO-DO
+				
+			}
+			else if (role.compareTo("inner") == 0) {
+				
+				// TO-DO
+				
+			}
+			else if (role.compareTo("label") == 0) {
+				
+				// TO-DO
+				
+			}
+			else if (role.compareTo("subarea") == 0) {
+				
+				// TO-DO
+				
+			}
+			else if (role.isEmpty()) {
+				
+				Coord coord = mDatabase.getRelationCoord(relation);
+				
+				String description = "Relation member in pos '" + pos +"' has an empty role";
+				
+				//Log.warning(description);
+				
+				addErrorNode(ErrorLevel.MEDIUM, coord, relationId, description);
+			}
+			else {
+				
+				Coord coord = mDatabase.getRelationCoord(relation);
+				
+				String description = "Unknown relation member role '" + role + "' in pos '" + pos +"'";
+				
+				//Log.warning(description);
+				
+				addErrorNode(ErrorLevel.MEDIUM, coord, relationId, description);
 			}
 			
+			pos++;
 		}
 		
 		if (!hasAdminCentre) {

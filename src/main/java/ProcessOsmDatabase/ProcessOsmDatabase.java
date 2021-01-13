@@ -42,9 +42,9 @@ public class ProcessOsmDatabase {
 	
 	private final static String APP_NAME = "ProcessOsmDatabase";
 	
-	private final static String APP_VERSION= "0.04";
+	private final static String APP_VERSION= "0.05";
 	
-	private final static String APP_DATE= "Jan 10th 2021";
+	private final static String APP_DATE= "Jan 13th 2021";
 	
 	private final static String XML_MAIN_NODE_NAME = APP_NAME;
 	
@@ -808,121 +808,4 @@ public class ProcessOsmDatabase {
 		mOutputGeoJsonFiles[LEVEL_LOW] = new GeoJSONFile(outputGeoJsonFileNameLow, APP_NAME);
 		Log.info("Output GeoJSON file <" + outputGeoJsonFileNameLow + ">");
 	}
-	
-	/*
-	private static void checkBoundaries(OsmDatabase db) {
-		
-		ArrayList<ArrayList<Relation>> levels=new ArrayList<ArrayList<Relation>>();
-		
-		for (int i=0; i<=MAX_ADMIN_LEVEL; i++) {
-			
-			levels.add(new ArrayList<Relation>());
-		}
-		
-		List<Long> relIds=db.getRelationsIdsByType("boundary");
-		
-		if (relIds==null)
-			return;
-		
-		Log.info("Found "+relIds.size()+" relations of type <boundary>");
-		
-		Iterator<Long> iter=relIds.iterator();
-		
-		while(iter.hasNext()) {
-			
-			long relId=iter.next();
-			
-			Relation relation=db.getRelationById(relId);
-			
-			Collection<Tag> tags=relation.getTags();
-			
-			String boundaryType=null;
-			boolean isAdministrative=false;
-			boolean hasAdminLevel=false;
-			int adminLevel=-1;
-			
-			Iterator<Tag> tagIter=tags.iterator();
-			
-			while(tagIter.hasNext()) {
-				
-				Tag tag=tagIter.next();
-				
-				if (tag.getKey().compareTo("boundary")==0) {
-					
-					boundaryType=tag.getValue();
-					
-					if (boundaryType.compareTo("administrative")==0)
-						isAdministrative=true;
-				}
-				else if (tag.getKey().compareTo("admin_level")==0) {
-					
-					adminLevel=Integer.parseInt(tag.getValue());
-					
-					hasAdminLevel=true;
-				}
-			}
-			
-			if (!isAdministrative) {
-					
-				Log.warning("Boundary relation #"+relId+" is not administrative <"+
-						boundaryType+">");
-					
-				continue;
-			}
-			
-			if (!hasAdminLevel) {
-					
-				Log.warning("Boundary relation #"+relId+" has no admin level");
-					
-				continue;
-			}
-				
-			if ((adminLevel<0) || (adminLevel>MAX_ADMIN_LEVEL)) {
-					
-				Log.warning("Boundary relation #"+relId+" adminLevel <"+
-						adminLevel+"> invalid");
-					
-				continue;
-			}
-			
-			levels.get(adminLevel).add(relation);			
-		}
-		
-		for(int level=0; level<=MAX_ADMIN_LEVEL; level++) {
-			
-			ArrayList<Relation> rels=levels.get(level);
-			
-			Log.info("Admin Level "+level+": Found "+rels.size()+" administrative boundaries");
-			
-			if (rels.size()>100)
-				continue;
-			
-			Iterator<Relation> relIter=rels.iterator();
-			
-			while(relIter.hasNext()) {
-				
-				Relation rel=relIter.next();
-				
-				String name=null;
-				
-				Collection<Tag> tags=rel.getTags();
-				
-				Iterator<Tag> tagIter=tags.iterator();
-				
-				while(tagIter.hasNext()) {
-					
-					Tag tag=tagIter.next();
-					
-					if (tag.getKey().compareTo("name")==0) {
-						
-						name=tag.getValue();
-					}
-				}
-				
-				//System.out.println("   Relation "+rel.getId()+" Name: "+name);
-			}
-			
-		}
-	}
-	*/
 }
