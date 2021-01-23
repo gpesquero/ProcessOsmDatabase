@@ -1,9 +1,11 @@
 package ProcessOsmDatabase;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 
+import org.openstreetmap.osmosis.core.domain.v0_6.Relation;
 import org.openstreetmap.osmosis.core.domain.v0_6.Tag;
 import org.utilslibrary.Coord;
 import org.utilslibrary.GeoJSONFile;
@@ -27,10 +29,25 @@ public abstract class BaseChecker {
 		LOW
 	}
 	
-	public abstract void checkRelations(List<Long> relIds);
+	public abstract void checkRelation(Relation relation);
 	
 	protected abstract void addErrorNode(ErrorLevel level, Coord coord,
 			long relationId, String description);
+	
+	public void checkRelations(List<Long> relIds) {
+		
+		Iterator<Long> relIter = relIds.iterator();
+		
+		while(relIter.hasNext()) {
+			
+			Long relId = relIter.next();
+			
+			Relation rel = mDatabase.getRelationById(relId);
+			
+			if (rel != null)
+				checkRelation(rel);			
+		}		
+	}
 	
 	public void setGeoJSONFiles(GeoJSONFile[] errorFiles) {
 		

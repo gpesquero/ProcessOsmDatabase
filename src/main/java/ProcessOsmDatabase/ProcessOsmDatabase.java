@@ -42,9 +42,9 @@ public class ProcessOsmDatabase {
 	
 	private final static String APP_NAME = "ProcessOsmDatabase";
 	
-	private final static String APP_VERSION= "0.05";
+	private final static String APP_VERSION= "0.06";
 	
-	private final static String APP_DATE= "Jan 13th 2021";
+	private final static String APP_DATE= "Jan 24th 2021";
 	
 	private final static String XML_MAIN_NODE_NAME = APP_NAME;
 	
@@ -58,7 +58,11 @@ public class ProcessOsmDatabase {
 	
 	private static PTv2Checker mPTv2Checker = null;
 	
+	private static BusNetworkChecker mBusNetworkChecker = null;
+	
 	private static AdminBoundaryChecker mAdminBoundaryChecker = null;
+	
+	private static HikingChecker mHikingChecker = null;
 	
 	private static GeoJSONFile mOutputGeoJsonFiles[] = null;
 	
@@ -137,7 +141,11 @@ public class ProcessOsmDatabase {
 		
 		mPTv2Checker = new PTv2Checker(relsToProcess);
 		
+		mBusNetworkChecker = new BusNetworkChecker(relsToProcess);
+		
 		mAdminBoundaryChecker = new AdminBoundaryChecker(relsToProcess);
+		
+		mHikingChecker = new HikingChecker(relsToProcess);
 		
 		Log.info("Processing input XML file <" + inputXmlFileName + ">...");
 		
@@ -241,8 +249,14 @@ public class ProcessOsmDatabase {
 				mPTv2Checker.setOsmDatabase(mDatabase);
 				mPTv2Checker.setGeoJSONFiles(mOutputGeoJsonFiles);
 				
+				mBusNetworkChecker.setOsmDatabase(mDatabase);
+				mBusNetworkChecker.setGeoJSONFiles(mOutputGeoJsonFiles);
+				
 				mAdminBoundaryChecker.setOsmDatabase(mDatabase);
 				mAdminBoundaryChecker.setGeoJSONFiles(mOutputGeoJsonFiles);
+				
+				mHikingChecker.setOsmDatabase(mDatabase);
+				mHikingChecker.setGeoJSONFiles(mOutputGeoJsonFiles);
 			}
 		}
 		else if (element.getNodeName().compareTo("relation")==0) {
@@ -422,15 +436,21 @@ public class ProcessOsmDatabase {
 						
 						mPTv2Checker.checkRelations(relIds);					
 					}
-					else if (value.compareTo("hiking")==0) {
+					else if (value.compareTo("BusNetwork") == 0) {
+						
+						Log.info("Checking route <BusNetwork>");
+						
+						mBusNetworkChecker.checkRelations(relIds);						
+					}
+					else if (value.compareTo("hiking") == 0) {
 						
 						Log.info("Checking route <Hiking>");
 						
-						mDatabase.checkHiking(relIds);						
+						mHikingChecker.checkRelations(relIds);						
 					}
 					else {
 						
-						Log.error("Unknown value <"+value+"> for check <route>");						
+						Log.error("Unknown value '"+value+"' for check <route>");						
 					}
 						
 				}

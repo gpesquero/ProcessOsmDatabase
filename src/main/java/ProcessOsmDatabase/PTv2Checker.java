@@ -31,6 +31,7 @@ public class PTv2Checker extends BaseChecker {
 		mRelsToProcess = relsToProcess;
 	}
 	
+	/*
 	public void checkRelations(List<Long> relIds) {
 		
 		Iterator<Long> relIter = relIds.iterator();
@@ -49,6 +50,7 @@ public class PTv2Checker extends BaseChecker {
 			}
 		}		
 	}
+	*/
 	
 	public void checkRelation(Relation relation) {
 		
@@ -96,7 +98,7 @@ public class PTv2Checker extends BaseChecker {
 					
 					Log.warning("Unknown 'type' tag in relation #" + relation.getId());
 					
-					addErrorNode(ErrorLevel.HIGH, coord, relation.getId(), description);
+					addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 					
 					break;
 				}
@@ -111,7 +113,7 @@ public class PTv2Checker extends BaseChecker {
 			
 			Log.warning(description);
 			
-			addErrorNode(ErrorLevel.HIGH, coord, relation.getId(), description);
+			addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 		}
 	}
 	
@@ -149,7 +151,7 @@ public class PTv2Checker extends BaseChecker {
 				
 				String description = "Member of Network Relation in pos '" + pos + "' is not a relation";
 				
-				addErrorNode(ErrorLevel.HIGH, coord, relation.getId(), description);
+				addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 			}				
 		}
 		
@@ -159,7 +161,7 @@ public class PTv2Checker extends BaseChecker {
 			
 			String description = "Network Relation does not have any relation";
 			
-			addErrorNode(ErrorLevel.HIGH, coord, relation.getId(), description);
+			addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 		}
 	}
 	
@@ -204,7 +206,7 @@ public class PTv2Checker extends BaseChecker {
 			
 			String description = "Master Route Relation is not a bus route";
 			
-			addErrorNode(ErrorLevel.HIGH, coord, relation.getId(), description);
+			addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 		}
 		
 		if (!hasRefTag) {
@@ -220,7 +222,7 @@ public class PTv2Checker extends BaseChecker {
 			
 			Coord coord = mDatabase.getRelationCoord(relation);
 			
-			String description = "Master Route Relation has no 'color' nor 'colour' tag";
+			String description = "Master Route Relation has no 'color/colour' tag";
 			
 			addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 		}
@@ -257,7 +259,7 @@ public class PTv2Checker extends BaseChecker {
 				
 				String description = "Member of Master Route Relation in pos '"+pos+"' is not a relation";
 				
-				addErrorNode(ErrorLevel.HIGH, coord, relation.getId(), description);
+				addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 			}				
 		}
 		
@@ -267,7 +269,7 @@ public class PTv2Checker extends BaseChecker {
 			
 			String description = "Master Route does not have any relation";
 			
-			addErrorNode(ErrorLevel.HIGH, coord, relation.getId(), description);
+			addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 		}
 		else if (numberOfRoutes<2) {
 			
@@ -345,7 +347,7 @@ public class PTv2Checker extends BaseChecker {
 			
 			String description = "Route Relation is not a bus route";
 			
-			addErrorNode(ErrorLevel.HIGH, coord, relation.getId(), description);
+			addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 		}
 		
 		if (!hasRefTag) {
@@ -370,7 +372,7 @@ public class PTv2Checker extends BaseChecker {
 			
 			Coord coord = mDatabase.getRelationCoord(relation);
 			
-			String description = "Relation has no 'color' nor 'colour' tag";
+			String description = "Relation has no 'color/colour' tag";
 			
 			addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 		}
@@ -710,7 +712,7 @@ public class PTv2Checker extends BaseChecker {
 					
 					String description = "<Way #"+way.getId()+"> has less than 2 nodes";
 					
-					addErrorNode(ErrorLevel.HIGH, nodeCoord, relation.getId(), description);
+					addErrorNode(ErrorLevel.MEDIUM, nodeCoord, relation.getId(), description);
 					
 					orderedRoute=false;
 					
@@ -756,7 +758,7 @@ public class PTv2Checker extends BaseChecker {
 							
 							String description = "Detected non continuity in <Way #" + way.getId() + ">";
 							
-							addErrorNode(ErrorLevel.HIGH, coord, relation.getId(), description);
+							addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 							
 							orderedRoute=false;
 							
@@ -788,7 +790,7 @@ public class PTv2Checker extends BaseChecker {
 							
 							String description = "Detected non continuity in <Node #"+prevLinkNode+">";
 							
-							addErrorNode(ErrorLevel.HIGH, nodeCoord, relation.getId(), description);
+							addErrorNode(ErrorLevel.MEDIUM, nodeCoord, relation.getId(), description);
 							
 							Log.debug("PTv2: Pos="+pos+", wayId="+way.getId());							
 							Log.debug("PTv2: PrevLinkNode="+prevLinkNode+", nodeId1="+nodeId1+", nodeId2="+nodeId2);							
@@ -1409,5 +1411,4 @@ public class PTv2Checker extends BaseChecker {
 		
 		addNodeToGeoJson(level, coord, relationId, title, description);
 	}
-
 }

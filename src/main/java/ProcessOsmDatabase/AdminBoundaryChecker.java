@@ -150,7 +150,10 @@ public class AdminBoundaryChecker extends BaseChecker {
 		
 		Iterator<RelationMember> iter = members.iterator();
 		
-		int pos = 0; 
+		int memberPos = 0;
+		
+		boolean outerAreaActive = false;
+		boolean innerAreaActive = false;
 		
 		while(iter.hasNext()) {
 			
@@ -175,6 +178,20 @@ public class AdminBoundaryChecker extends BaseChecker {
 			}
 			else if (role.compareTo("outer") == 0) {
 				
+				EntityType type = member.getMemberType();
+				
+				if (type != EntityType.Way) {
+					
+					Coord coord = mDatabase.getRelationCoord(relation);
+					
+					String description = "Relation member with role 'outer' in pos '" +
+							memberPos + "' is not a way";
+					
+					Log.warning(description);
+					
+					addErrorNode(ErrorLevel.HIGH, coord, relationId, description);
+				}
+				
 				// TO-DO
 				
 			}
@@ -197,7 +214,7 @@ public class AdminBoundaryChecker extends BaseChecker {
 				
 				Coord coord = mDatabase.getRelationCoord(relation);
 				
-				String description = "Relation member in pos '" + pos +"' has an empty role";
+				String description = "Relation member in pos '" + memberPos +"' has an empty role";
 				
 				//Log.warning(description);
 				
@@ -207,14 +224,15 @@ public class AdminBoundaryChecker extends BaseChecker {
 				
 				Coord coord = mDatabase.getRelationCoord(relation);
 				
-				String description = "Unknown relation member role '" + role + "' in pos '" + pos +"'";
+				String description = "Unknown relation member role '" + role +
+						"' in pos '" + memberPos +"'";
 				
 				//Log.warning(description);
 				
 				addErrorNode(ErrorLevel.MEDIUM, coord, relationId, description);
 			}
 			
-			pos++;
+			memberPos++;
 		}
 		
 		if (!hasAdminCentre) {
