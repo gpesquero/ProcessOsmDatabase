@@ -395,7 +395,9 @@ public class PTv2Checker extends BaseChecker {
 		
 			RelationMember member = members.get(pos);
 			
-			if (member.getMemberRole().compareTo("stop") == 0) {
+			String memberRole = member.getMemberRole();
+			
+			if (memberRole.compareTo("stop") == 0) {
 				
 				if (foundEmptyRole) {
 					
@@ -422,7 +424,9 @@ public class PTv2Checker extends BaseChecker {
 						
 						String nextMemberRole = members.get(pos+1).getMemberRole();
 						
-						if (nextMemberRole.compareTo("platform") != 0) {
+						if ((nextMemberRole.compareTo("platform") != 0) &&
+							(nextMemberRole.compareTo("platform_entry_only") != 0) && 
+							(nextMemberRole.compareTo("platform_exit_only") != 0)) {
 							
 							Coord coord = mDatabase.getNodeCoord(member.getMemberId());
 							
@@ -497,7 +501,9 @@ public class PTv2Checker extends BaseChecker {
 					addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 				}				
 			}
-			else if (member.getMemberRole().compareTo("platform") == 0) {
+			else if ((memberRole.compareTo("platform") == 0) ||
+					 (memberRole.compareTo("platform_entry_only") != 0) || 
+					 (memberRole.compareTo("platform_exit_only") != 0)) {
 				
 				if (foundEmptyRole) {
 					
@@ -628,7 +634,7 @@ public class PTv2Checker extends BaseChecker {
 					addErrorNode(ErrorLevel.MEDIUM, coord, relation.getId(), description);
 				}				
 			}
-			else if (member.getMemberRole().isEmpty()) {
+			else if (memberRole.isEmpty()) {
 				
 				// Found an empty role member. It shall be a way
 				

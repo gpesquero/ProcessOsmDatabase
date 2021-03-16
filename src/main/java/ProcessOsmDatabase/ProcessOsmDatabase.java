@@ -42,9 +42,9 @@ public class ProcessOsmDatabase {
 	
 	private final static String APP_NAME = "ProcessOsmDatabase";
 	
-	private final static String APP_VERSION= "0.06";
+	private final static String APP_VERSION= "0.07";
 	
-	private final static String APP_DATE= "Jan 24th 2021";
+	private final static String APP_DATE= "Mar 16th 2021";
 	
 	private final static String XML_MAIN_NODE_NAME = APP_NAME;
 	
@@ -66,9 +66,13 @@ public class ProcessOsmDatabase {
 	
 	private static GeoJSONFile mOutputGeoJsonFiles[] = null;
 	
+	private static BusLinesDatabase mBusLinesDatabase = null;
+	
 	private static boolean mFilter = false;
 	
 	private static String mDataDir = null;
+	
+	private static String mDbPassword = null;
 	
 	private static int LEVEL_HIGH = 0;
 	private static int LEVEL_MEDIUM = 1;
@@ -101,11 +105,17 @@ public class ProcessOsmDatabase {
 				
 				mDataDir = args[i].substring(new String("--dataDir=").length());
 			}
+			else if (args[i].startsWith("--dbPassword=")) {
+				
+				mDbPassword = args[i].substring(new String("--dbPassword=").length());
+			}
 		}
 		
 		Log.info("Show debug logs: " + Log.isShowDebugEnabled());
 		
 		Log.info("Data dir: " + mDataDir);
+		
+		Log.info("DB Password: " + mDbPassword);
 		
 		// Set input XML file name
 		
@@ -146,6 +156,8 @@ public class ProcessOsmDatabase {
 		mAdminBoundaryChecker = new AdminBoundaryChecker(relsToProcess);
 		
 		mHikingChecker = new HikingChecker(relsToProcess);
+		
+		mBusLinesDatabase = new BusLinesDatabase(mDbPassword);
 		
 		Log.info("Processing input XML file <" + inputXmlFileName + ">...");
 		
@@ -212,6 +224,8 @@ public class ProcessOsmDatabase {
 			mOutputGeoJsonFiles[LEVEL_LOW].close();
 		}
 		
+		Log.info("Convert has processed " + mBusLinesDatabase.getBusLinesCount() + " bus lines");
+		
 		if (mDatabase != null) {
 			
 			createBoundaryFile();
@@ -257,6 +271,9 @@ public class ProcessOsmDatabase {
 				
 				mHikingChecker.setOsmDatabase(mDatabase);
 				mHikingChecker.setGeoJSONFiles(mOutputGeoJsonFiles);
+				
+				mBusLinesDatabase.setOsmDatabase(mDatabase);
+				mBusLinesDatabase.setOutputDir(mPath + "/bus_lines/");
 			}
 		}
 		else if (element.getNodeName().compareTo("relation")==0) {
@@ -535,6 +552,39 @@ public class ProcessOsmDatabase {
 				}	
 			}
 		}
+		else if (element.getNodeName().compareTo("convert") == 0) {
+			
+			String text = "Convert with tags: ";
+			
+			Iterator<Tag> iter = tags.iterator();
+			
+			while(iter.hasNext()) {
+				
+				Tag tag = iter.next();
+				
+				text+="'"+tag.getKey()+"'='"+tag.getValue()+"' ";
+			}
+			
+			Log.info(text);
+			
+			Instant start = Instant.now();
+			
+			List<Long> relIds = mDatabase.getRelationsIdsByTags(tags);
+			
+			Instant end = Instant.now();
+		
+			Duration time = Duration.between(start, end);
+			
+			if (relIds == null) {
+				
+				Log.error("Convert error! relIds==null");
+			}
+			else
+				Log.info("Convert found "+relIds.size()+" relation(s) in "+time.toMillis()+" ms");
+			
+			mBusLinesDatabase.processRels(relIds);
+			
+		}
 		else {
 			
 			Log.warning("Unknown XML element <" + element.getNodeName() + ">");
@@ -542,7 +592,7 @@ public class ProcessOsmDatabase {
 			return true;
 		}
 		
-		NodeList childNodes=element.getChildNodes();
+		NodeList childNodes = element.getChildNodes();
 		
 		for(int i=0; i<childNodes.getLength(); i++) {
 			

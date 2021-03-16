@@ -9,8 +9,6 @@ import org.openstreetmap.osmosis.core.domain.v0_6.Tag;
 import org.utilslibrary.Coord;
 import org.utilslibrary.Log;
 
-import ProcessOsmDatabase.BaseChecker.ErrorLevel;
-
 public class BusNetworkChecker extends BaseChecker {
 	
 	public BusNetworkChecker(List<Long> relsToProcess) {
@@ -223,5 +221,4 @@ public class BusNetworkChecker extends BaseChecker {
 				
 		addNodeToGeoJson(level, coord, relationId, title, description);
 	}
-
 }

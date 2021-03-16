@@ -152,8 +152,8 @@ public class AdminBoundaryChecker extends BaseChecker {
 		
 		int memberPos = 0;
 		
-		boolean outerAreaActive = false;
-		boolean innerAreaActive = false;
+		//boolean outerAreaActive = false;
+		//boolean innerAreaActive = false;
 		
 		while(iter.hasNext()) {
 			
