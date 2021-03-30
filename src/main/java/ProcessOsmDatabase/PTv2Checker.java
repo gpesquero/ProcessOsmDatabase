@@ -397,7 +397,9 @@ public class PTv2Checker extends BaseChecker {
 			
 			String memberRole = member.getMemberRole();
 			
-			if (memberRole.compareTo("stop") == 0) {
+			if ((memberRole.compareTo("stop") == 0) || 
+				(memberRole.compareTo("stop_exit_only") == 0) || 
+				(memberRole.compareTo("stop_entry_only") == 0)) {
 				
 				if (foundEmptyRole) {
 					
@@ -502,8 +504,8 @@ public class PTv2Checker extends BaseChecker {
 				}				
 			}
 			else if ((memberRole.compareTo("platform") == 0) ||
-					 (memberRole.compareTo("platform_entry_only") != 0) || 
-					 (memberRole.compareTo("platform_exit_only") != 0)) {
+					 (memberRole.compareTo("platform_entry_only") == 0) || 
+					 (memberRole.compareTo("platform_exit_only") == 0)) {
 				
 				if (foundEmptyRole) {
 					
@@ -539,7 +541,9 @@ public class PTv2Checker extends BaseChecker {
 						
 						String previousMemberRole = members.get(pos-1).getMemberRole();
 						
-						if (previousMemberRole.compareTo("stop") != 0) {
+						if ((previousMemberRole.compareTo("stop") != 0) &&
+							(previousMemberRole.compareTo("stop_exit_only") != 0) &&
+							(previousMemberRole.compareTo("stop_entry_only") != 0)) {
 							
 							Coord coord = mDatabase.getNodeCoord(member.getMemberId());
 							

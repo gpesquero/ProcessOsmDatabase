@@ -42,9 +42,9 @@ public class ProcessOsmDatabase {
 	
 	private final static String APP_NAME = "ProcessOsmDatabase";
 	
-	private final static String APP_VERSION= "0.07";
+	private final static String APP_VERSION= "0.08";
 	
-	private final static String APP_DATE= "Mar 16th 2021";
+	private final static String APP_DATE= "Mar 30th 2021";
 	
 	private final static String XML_MAIN_NODE_NAME = APP_NAME;
 	
